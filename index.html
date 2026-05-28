@@ -55,7 +55,7 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 }
 #tap-btn:active{transform:scale(.94);}
 #tap-btn.flash{background:#f0a500;}
-#tap-btn-icon{font-size:52px;line-height:1;pointer-events:none;user-select:none;}
+#tap-btn-icon{width:52%;height:52%;object-fit:contain;pointer-events:none;user-select:none;}
 #tap-btn-label{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.7);pointer-events:none;}
 
 .ripple{
@@ -101,7 +101,7 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
   <div id="conn-dot"></div>
 
   <button id="tap-btn" aria-label="Tap for each bag packed">
-    <div id="tap-btn-icon">🎒</div>
+    <img id="tap-btn-icon" src="RBRbag.png" alt="Ready Bag" draggable="false">
     <div id="tap-btn-label">Tap per bag</div>
   </button>
 
@@ -152,6 +152,21 @@ document.getElementById('change-line').addEventListener('click', () => {
   document.getElementById('screen-select').classList.remove('hidden');
 });
 
+const _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playTick() {
+  const now = _audioCtx.currentTime;
+  const osc = _audioCtx.createOscillator();
+  const gain = _audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(_audioCtx.destination);
+  osc.frequency.setValueAtTime(1200, now);
+  osc.frequency.exponentialRampToValueAtTime(600, now + 0.02);
+  gain.gain.setValueAtTime(0.25, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
+  osc.start(now);
+  osc.stop(now + 0.03);
+}
+
 // ── Tap ───────────────────────────────────────────────────────
 const tapBtn = document.getElementById('tap-btn');
 
@@ -168,10 +183,11 @@ tapBtn.addEventListener('pointerdown', async (e) => {
   tapBtn.appendChild(ripple);
   setTimeout(() => ripple.remove(), 520);
 
-  // Flash + haptic
+  // Flash + haptic + tick
   tapBtn.classList.add('flash');
   setTimeout(() => tapBtn.classList.remove('flash'), 180);
   if (navigator.vibrate) navigator.vibrate(60);
+  playTick();
 
   // Optimistic UI
   lineCount++;
