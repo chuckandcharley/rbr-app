@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Ready Bag Rally</title>
+<link rel="preconnect" href="https://fonts.bunny.net">
+<link href="https://fonts.bunny.net/css?family=source-sans-3:400,600,700,900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#004270;--blue:#00b0ff;--bg:#002d50;--white:#fff;
+  --ff:'Source Sans 3','Arial Narrow',Arial,sans-serif;
+}
+html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);overflow:hidden;touch-action:manipulation;color:#fff;}
+
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;transition:opacity .3s ease;}
+.screen.hidden{opacity:0;pointer-events:none;}
+
+/* ── SELECT SCREEN ── */
+#screen-select{background:var(--bg);}
+#select-logo{width:56px;margin-bottom:18px;}
+#select-title{font-size:22px;font-weight:900;color:#fff;letter-spacing:-.02em;text-align:center;line-height:1.15;margin-bottom:6px;}
+#select-sub{font-size:13px;font-weight:700;color:var(--blue);letter-spacing:.08em;text-transform:uppercase;text-align:center;margin-bottom:28px;}
+#line-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;width:100%;max-width:320px;}
+.line-btn{
+  aspect-ratio:1;border-radius:12px;border:1.5px solid rgba(0,176,255,.35);
+  background:rgba(255,255,255,.05);
+  font-size:18px;font-weight:900;color:#fff;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:background .12s,border-color .12s,transform .1s,box-shadow .12s;
+  -webkit-tap-highlight-color:transparent;
+}
+.line-btn:active{transform:scale(.92);background:var(--blue);border-color:var(--blue);color:var(--navy);box-shadow:0 0 0 4px rgba(0,176,255,.2);}
+
+/* ── TAP SCREEN ── */
+#screen-tap{background:var(--navy);padding:0;}
+#tap-header{
+  position:absolute;top:0;left:0;right:0;
+  padding:20px 24px 0;
+  display:flex;align-items:flex-start;justify-content:space-between;
+}
+#tap-line-label{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.45);}
+#tap-line-num{font-size:22px;font-weight:900;color:#fff;line-height:1.1;margin-top:2px;}
+#change-line{background:none;border:1.5px solid rgba(255,255,255,.2);border-radius:6px;padding:6px 12px;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.45);cursor:pointer;font-family:var(--ff);-webkit-tap-highlight-color:transparent;}
+#change-line:active{background:rgba(255,255,255,.08);}
+
+#tap-btn{
+  width:min(72vw,300px);height:min(72vw,300px);
+  border-radius:50%;background:var(--blue);border:none;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  -webkit-tap-highlight-color:transparent;
+  transition:transform .1s,background .12s;
+  position:relative;overflow:hidden;
+  box-shadow:0 0 0 12px rgba(0,176,255,.18),0 0 0 24px rgba(0,176,255,.08);
+}
+#tap-btn:active{transform:scale(.94);}
+#tap-btn.flash{background:#33c6ff;}
+#tap-btn-icon{width:64%;height:64%;object-fit:contain;pointer-events:none;user-select:none;margin-top:6px;}
+#tap-btn-label{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(0,66,112,.85);pointer-events:none;margin-bottom:4px;}
+
+.ripple{
+  position:absolute;border-radius:50%;background:rgba(255,255,255,.25);
+  transform:scale(0);animation:ripple-out .5s ease forwards;pointer-events:none;
+}
+@keyframes ripple-out{to{transform:scale(2.5);opacity:0;}}
+
+#tap-count-wrap{margin-top:32px;text-align:center;}
+#tap-count{font-size:clamp(48px,14vw,96px);font-weight:900;color:var(--white);letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums;}
+#tap-count-label{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-top:4px;}
+
+#tap-footer{position:absolute;bottom:0;left:0;right:0;padding:0 24px 28px;text-align:center;}
+#tap-locked-msg{font-size:13px;font-weight:700;color:var(--blue);text-align:center;display:none;}
+
+#conn-dot{position:absolute;top:22px;right:50%;transform:translateX(50%);width:6px;height:6px;border-radius:50%;background:#3a3;transition:background .3s;}
+#conn-dot.off{background:#a33;}
+</style>
+</head>
+<body>
+
+<!-- SELECT LINE -->
+<div class="screen" id="screen-select">
+  <svg id="select-logo" viewBox="-40 -40 2080 2128" xmlns="http://www.w3.org/2000/svg">
+    <path fill="#ffffff" d="M 833.543 24.9457 L 835.261 24.812 C 844.162 24.0486 854.822 20.7168 863.96 19.4112 C 951.933 6.84074 1039.68 2.55187 1128.1 13.5491 C 1162.55 17.8343 1197 21.7025 1231.1 29.683 C 1459.71 77.0967 1664.85 202.203 1811.66 383.743 C 1852.34 433.985 1896.03 496.748 1923.67 555.192 C 1960.88 633.901 1956.95 738.11 1939.98 821.759 C 1895.04 1043.29 1720.99 1197.25 1521.74 1284.68 C 1528.61 1270.08 1534.47 1253.78 1540.7 1238.78 C 1559.98 1183.17 1571.63 1134.19 1574.44 1074.95 C 1580.64 944.298 1530.9 800.505 1444.33 702.774 C 1434.64 688.765 1410.11 666.083 1397 654.28 C 1324.71 589.168 1233.65 541.899 1137.39 524.833 C 984.994 497.814 847.714 529.55 721.588 618.114 C 680.009 647.342 643.189 682.81 612.425 723.266 C 608.797 728.06 600.394 738.919 597.399 743.82 C 562.312 795.152 538.038 843.969 519.909 903.37 C 511.076 930.979 506.861 967.91 503.539 996.629 C 501.167 1026.13 497.083 1075.8 502.939 1105.17 C 503.468 1121.72 507.148 1142.01 510.201 1158.41 C 531.251 1267.13 585.846 1366.51 666.31 1442.59 C 739.384 1511.02 815.608 1551.94 912.081 1576.58 C 931.058 1580.94 973.625 1589.6 991.996 1589.87 C 1012.24 1592.55 1033.77 1594.22 1054.21 1593.32 C 1065.72 1592.81 1078.08 1591.27 1089.6 1590.42 C 1095.37 1589.99 1105.49 1587 1110.44 1587.78 L 1110.5 1589 C 1097 1593.58 1081.4 1597.39 1067.57 1601.66 C 1039.09 1610.43 1009.88 1619.43 980.903 1626.33 C 898.952 1644.95 846.305 1649.82 761.327 1647.66 C 749.928 1647.4 738.552 1646.5 727.253 1644.97 C 722.583 1644.36 709.081 1642.16 705.061 1642.22 C 687.056 1638.27 667.947 1636.38 650.2 1632.06 C 478.414 1590.23 346.486 1454.81 277.077 1296.17 C 266.807 1272.7 251.853 1240.33 245.212 1215.46 C 223.59 1216.06 198.953 1215.44 177.128 1215.44 C 124.884 1215.3 72.64 1215.49 20.3988 1216.01 C 16.7222 1181.19 10.238 1148.04 7.4659 1111.92 C -6.96292 923.874 28.7594 724.979 117.979 557.466 C 144.088 506.885 170.061 467.504 202.001 421.256 C 208.192 413.912 213.93 405.999 219.913 398.42 C 339.095 247.438 499.472 129.959 681.117 65.653 C 731.223 47.9144 781.998 36.1015 833.543 24.9457 z"/>
+    <path fill="#ffffff" d="M 1578.15 1497.09 C 1591.87 1495.21 1617.98 1486.66 1632.23 1482.23 C 1735.48 1450.16 1835.81 1403.16 1929.94 1350.25 C 1949.84 1339.07 1978.73 1324.16 1997.27 1311.94 C 1935.64 1527.69 1822.63 1685.85 1650.29 1827.78 C 1538.49 1916.33 1409.1 1980.06 1270.75 2014.7 C 1248.92 2020.8 1226.39 2025.2 1204.03 2029.08 C 1016.65 2061.61 817.98 2043.84 641.545 1971.7 C 622.351 1963.85 603.947 1953.58 584.547 1946.16 C 605.05 1946.37 619.357 1945.11 639.565 1943.87 C 713.025 1939.33 796.058 1929.49 867.636 1912.09 C 929.61 1897.58 990.409 1878.44 1049.52 1854.85 C 1195.98 1795.4 1337.42 1692.05 1423.23 1557.96 C 1433.27 1542.27 1441.79 1525.58 1451.48 1509.66 C 1458.09 1508.81 1465.66 1508.43 1472.38 1507.93 C 1507.48 1508.75 1543.75 1503.65 1578.15 1497.09 z"/>
+    <path fill="#ffffff" d="M 694.74 1327.94 C 641.237 1264.32 606.51 1187.06 594.451 1104.81 C 554.736 847.323 753.586 604.414 1016.21 598.583 C 1039.54 598.065 1073.08 599.231 1095.85 602.431 C 1194 616.218 1280.25 662.068 1349.24 732.662 C 1419.07 804.113 1457.69 887.05 1471.66 985.897 C 1477.07 1023.89 1476.23 1076.88 1468.26 1114.58 C 1459.99 1168.8 1434.18 1234.72 1403.99 1279.92 C 1394.53 1294.09 1383.66 1307.87 1373.95 1322.16 C 1375.57 1307.72 1374.9 1289.42 1374.87 1274.57 L 1374.77 1200.49 L 1374.73 1063.04 C 1374.58 1046.04 1374.97 1027.71 1374.22 1010.96 C 1386.32 1010.29 1412.48 1009.1 1423.83 1009.92 L 1038.83 690.576 C 1012.55 704.352 986.156 727.614 962.452 746.191 L 876.838 812.166 C 877.935 799.701 877.109 775.311 877.229 761.705 C 871.514 761.982 864.853 761.847 859.133 761.612 C 836.383 760.674 812.748 762.192 790.117 760.666 C 789.624 800.654 793.297 847.877 788.054 886.686 C 781.804 894.124 757.729 914.911 749.423 921.906 C 714.195 951.576 675.294 986.753 638.682 1014.13 C 656.809 1013.44 676.669 1013.84 694.925 1013.86 C 694.191 1025.15 694.799 1043.16 694.807 1054.82 L 694.673 1129.88 L 694.91 1268.67 C 694.959 1288.24 694.316 1308.59 694.74 1327.94 z"/>
+  </svg>
+  <div id="select-title">Ready Bag Rally</div>
+  <div id="select-sub">Select your line</div>
+  <div id="line-grid"></div>
+</div>
+
+<!-- TAP SCREEN -->
+<div class="screen hidden" id="screen-tap">
+  <div id="tap-header">
+    <div>
+      <div id="tap-line-label">You are on</div>
+      <div id="tap-line-num">Line —</div>
+    </div>
+    <button id="change-line">Change line</button>
+  </div>
+  <div id="conn-dot"></div>
+
+  <button id="tap-btn" aria-label="Tap for each bag packed">
+    <img id="tap-btn-icon" src="RBRbag.png" alt="Ready Bag" draggable="false">
+    <div id="tap-btn-label">Tap per bag</div>
+  </button>
+
+  <div id="tap-count-wrap">
+    <div id="tap-count">0</div>
+    <div id="tap-count-label">bags from your line</div>
+  </div>
+
+  <div id="tap-footer">
+    <div id="tap-locked-msg">🎉 16,000 bags packed — amazing work!</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const SUPABASE_URL = 'https://advjuonmfxpjxxgmoycx.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFkdmp1b25tZnhwanh4Z21veWN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NzkyMjQsImV4cCI6MjA5NTU1NTIyNH0.hgAlqocR8DSTHNGg_fdG6nWW6NQ6t_K2RD7D4sdXPGc';
+const GOAL = 16000;
+const LINES = 16;
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+let selectedLine = null;
+let lineCount = 0;
+let locked = false;
+let tapping = false;
+
+// ── Build line grid ───────────────────────────────────────────
+const grid = document.getElementById('line-grid');
+for (let i = 1; i <= LINES; i++) {
+  const btn = document.createElement('button');
+  btn.className = 'line-btn';
+  btn.textContent = i;
+  btn.addEventListener('click', () => selectLine(i));
+  grid.appendChild(btn);
+}
+
+async function selectLine(n) {
+  selectedLine = n;
+  document.getElementById('tap-line-num').textContent = `Line ${n}`;
+  document.getElementById('screen-select').classList.add('hidden');
+  document.getElementById('screen-tap').classList.remove('hidden');
+  await refreshLineCount();
+}
+
+document.getElementById('change-line').addEventListener('click', () => {
+  document.getElementById('screen-tap').classList.add('hidden');
+  document.getElementById('screen-select').classList.remove('hidden');
+});
+
+const _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playTick() {
+  const now = _audioCtx.currentTime;
+  const osc = _audioCtx.createOscillator();
+  const gain = _audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(_audioCtx.destination);
+  osc.frequency.setValueAtTime(1200, now);
+  osc.frequency.exponentialRampToValueAtTime(600, now + 0.02);
+  gain.gain.setValueAtTime(0.25, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
+  osc.start(now);
+  osc.stop(now + 0.03);
+}
+
+// ── Tap ───────────────────────────────────────────────────────
+const tapBtn = document.getElementById('tap-btn');
+
+tapBtn.addEventListener('pointerdown', async (e) => {
+  if (locked || tapping) return;
+  tapping = true;
+
+  // Ripple
+  const rect = tapBtn.getBoundingClientRect();
+  const size = Math.max(rect.width, rect.height);
+  const ripple = document.createElement('div');
+  ripple.className = 'ripple';
+  ripple.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX - rect.left - size/2}px;top:${e.clientY - rect.top - size/2}px;`;
+  tapBtn.appendChild(ripple);
+  setTimeout(() => ripple.remove(), 520);
+
+  // Flash + haptic + tick
+  tapBtn.classList.add('flash');
+  setTimeout(() => tapBtn.classList.remove('flash'), 180);
+  if (navigator.vibrate) navigator.vibrate(60);
+  playTick();
+
+  // Optimistic UI
+  lineCount++;
+  document.getElementById('tap-count').textContent = lineCount.toLocaleString();
+
+  try {
+    const { data, error } = await sb.rpc('increment_line', { line_id: selectedLine });
+    if (error) throw error;
+    lineCount = data.new_count;
+    document.getElementById('tap-count').textContent = lineCount.toLocaleString();
+    if (data.total >= GOAL) setLocked(true);
+  } catch (err) {
+    // optimistic count stays, reconciles on next refresh
+    console.error(err);
+  }
+
+  tapping = false;
+});
+
+// ── State ─────────────────────────────────────────────────────
+async function refreshLineCount() {
+  try {
+    const { data, error } = await sb
+      .from('lines')
+      .select('count')
+      .eq('id', selectedLine)
+      .single();
+    if (error) throw error;
+    lineCount = data.count;
+    document.getElementById('tap-count').textContent = lineCount.toLocaleString();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function setLocked(val) {
+  locked = val;
+  tapBtn.style.opacity = val ? '0.4' : '1';
+  tapBtn.style.pointerEvents = val ? 'none' : 'all';
+  document.getElementById('tap-locked-msg').style.display = val ? 'block' : 'none';
+}
+
+// ── Connection indicator ──────────────────────────────────────
+const connDot = document.getElementById('conn-dot');
+sb.channel('conn-check')
+  .on('system', {}, (status) => {
+    connDot.classList.toggle('off', status !== 'SUBSCRIBED');
+  })
+  .subscribe((status) => {
+    connDot.classList.toggle('off', status !== 'SUBSCRIBED');
+  });
+
+// Fallback refresh every 30s
+setInterval(() => { if (selectedLine) refreshLineCount(); }, 30000);
+</script>
+</body>
+</html>
