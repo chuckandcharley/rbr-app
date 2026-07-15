@@ -35,14 +35,13 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 #celebration{
   position:fixed;inset:0;z-index:50;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  background:rgba(0,21,40,.92);
+  /* vignette: stays clear in the center where the number sits, darkens toward the edges */
+  background:radial-gradient(circle at 50% 50%, rgba(0,21,40,0) 0%, rgba(0,21,40,0) 30%, rgba(0,21,40,.55) 65%, rgba(0,21,40,.88) 100%);
   opacity:0;pointer-events:none;
-  transition:opacity .8s ease;
+  transition:opacity 1s ease;
 }
 #celebration.show{opacity:1;}
-#celebration-num{font-size:clamp(100px,18vw,300px);font-weight:900;color:var(--blue);letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums;}
-#celebration-text{font-size:clamp(22px,3.5vw,64px);font-weight:900;color:#fff;margin-top:12px;text-align:center;}
-#celebration-sub{font-size:24px;font-weight:600;color:rgba(255,255,255,.45);margin-top:16px;letter-spacing:.06em;text-transform:uppercase;}
+#celebration-num{font-size:clamp(200px,22vw,420px);font-weight:900;color:#fff;letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums;text-shadow:0 0 70px rgba(0,176,255,.6);}
 
 #confetti-canvas{position:fixed;inset:0;z-index:60;pointer-events:none;}
 
@@ -65,8 +64,6 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 
 <div id="celebration">
   <div id="celebration-num">16,000</div>
-  <div id="celebration-text">Every family gets a Toiletry Bag.</div>
-  <div id="celebration-sub">Mission accomplished &middot; July 23, 2026</div>
 </div>
 <canvas id="confetti-canvas"></canvas>
 <div id="conn"></div>
@@ -102,7 +99,8 @@ sb.channel('lines-changes')
   });
 
 function applyState() {
-  const total = counts.reduce((a, b) => a + b, 0);
+  const rawTotal = counts.reduce((a, b) => a + b, 0);
+  const total = Math.min(rawTotal, GOAL); // never display past the goal
 
   if (total !== lastTotal) {
     const el = document.getElementById('total-num');
@@ -118,6 +116,11 @@ function applyState() {
   if (total >= GOAL && !celebrationFired) {
     celebrationFired = true;
     triggerCelebration();
+  } else if (total < GOAL && celebrationFired) {
+    // counts were reset — clear the celebration so it can fire again later
+    celebrationFired = false;
+    document.getElementById('celebration').classList.remove('show');
+    stopConfetti();
   }
 
   lastTotal = total;
@@ -128,15 +131,17 @@ function triggerCelebration() {
   startConfetti();
 }
 
-function startConfetti() {
-  const canvas = document.getElementById('confetti-canvas');
-  const ctx = canvas.getContext('2d');
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+let confettiRunning = false;
+let confettiFrameId = null;
+let confettiParticles = null;
+let confettiCanvas = null;
+let confettiCtx = null;
+
+function makeParticle(canvas, randomizeY) {
   const COLORS = ['#00b0ff','#004270','#0378ad','#ffffff','#f3f9fd','#7fd4ff'];
-  const particles = Array.from({ length: 220 }, () => ({
+  return {
     x: Math.random() * canvas.width,
-    y: Math.random() * canvas.height - canvas.height,
+    y: randomizeY ? Math.random() * canvas.height : -20 - Math.random() * canvas.height * 0.3,
     w: 6 + Math.random() * 8, h: 10 + Math.random() * 6,
     color: COLORS[Math.floor(Math.random() * COLORS.length)],
     rot: Math.random() * Math.PI * 2,
@@ -144,27 +149,47 @@ function startConfetti() {
     vx: (Math.random() - 0.5) * 2.5,
     vy: 2.5 + Math.random() * 3.5,
     opacity: 0.85 + Math.random() * 0.15,
-  }));
-  let running = true;
+  };
+}
+
+function startConfetti() {
+  if (confettiRunning) return; // already going
+  confettiCanvas = document.getElementById('confetti-canvas');
+  confettiCtx = confettiCanvas.getContext('2d');
+  confettiCanvas.width = window.innerWidth;
+  confettiCanvas.height = window.innerHeight;
+  confettiParticles = Array.from({ length: 220 }, () => makeParticle(confettiCanvas, true));
+  confettiRunning = true;
+
   function frame() {
-    if (!running) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    let allGone = true;
-    particles.forEach(p => {
+    if (!confettiRunning) return;
+    confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+    confettiParticles.forEach(p => {
       p.x += p.vx; p.y += p.vy; p.rot += p.rotV;
-      if (p.y < canvas.height + 20) allGone = false;
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.rotate(p.rot);
-      ctx.globalAlpha = p.opacity;
-      ctx.fillStyle = p.color;
-      ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
-      ctx.restore();
+      // recycle back to the top so it keeps falling indefinitely
+      if (p.y > confettiCanvas.height + 20) {
+        const fresh = makeParticle(confettiCanvas, false);
+        Object.assign(p, fresh);
+      }
+      confettiCtx.save();
+      confettiCtx.translate(p.x, p.y);
+      confettiCtx.rotate(p.rot);
+      confettiCtx.globalAlpha = p.opacity;
+      confettiCtx.fillStyle = p.color;
+      confettiCtx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+      confettiCtx.restore();
     });
-    if (allGone) { running = false; return; }
-    requestAnimationFrame(frame);
+    confettiFrameId = requestAnimationFrame(frame);
   }
-  requestAnimationFrame(frame);
+  confettiFrameId = requestAnimationFrame(frame);
+}
+
+function stopConfetti() {
+  confettiRunning = false;
+  if (confettiFrameId) cancelAnimationFrame(confettiFrameId);
+  if (confettiCtx && confettiCanvas) {
+    confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+  }
 }
 
 loadAll();
