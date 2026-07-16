@@ -2,17 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Ready Bag Rally</title>
-
-<!-- PWA -->
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#002d50">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="apple-touch-icon" href="icon-192.png">
-
 <link rel="preconnect" href="https://fonts.bunny.net">
 <link href="https://fonts.bunny.net/css?family=source-sans-3:400,600,700,900&display=swap" rel="stylesheet">
 <style>
@@ -21,47 +12,52 @@
   --navy:#004270;--blue:#00b0ff;--bg:#002d50;--white:#fff;
   --ff:'Source Sans 3','Arial Narrow',Arial,sans-serif;
 }
-html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);overflow:hidden;touch-action:manipulation;color:#fff;
-  -webkit-user-select:none;user-select:none;overscroll-behavior:none;}
+html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);overflow:hidden;touch-action:manipulation;color:#fff;}
 
-.screen{position:fixed;inset:0;display:flex;transition:opacity .3s ease;}
-.screen.hidden{opacity:0;pointer-events:none;visibility:hidden;}
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;transition:opacity .3s ease;}
+.screen.hidden{opacity:0;pointer-events:none;}
 
-/* ── SELECT SCREEN (landscape) ── */
-#screen-select{background:var(--bg);flex-direction:column;align-items:center;justify-content:center;padding:4vh 6vw;}
-#select-logo{width:8vh;min-width:44px;margin-bottom:2.4vh;}
-#select-title{font-size:clamp(24px,4.6vh,42px);font-weight:900;color:#fff;letter-spacing:-.02em;text-align:center;line-height:1.1;margin-bottom:.6vh;}
-#select-sub{font-size:clamp(12px,1.8vh,16px);font-weight:700;color:var(--blue);letter-spacing:.1em;text-transform:uppercase;text-align:center;margin-bottom:3.2vh;}
-#line-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:1.4vh;width:100%;max-width:840px;}
+/* ── SELECT SCREEN ── */
+#screen-select{background:var(--bg);}
+#select-logo{width:56px;margin-bottom:18px;}
+#select-title{font-size:22px;font-weight:900;color:#fff;letter-spacing:-.02em;text-align:center;line-height:1.15;margin-bottom:6px;}
+#select-sub{font-size:13px;font-weight:700;color:var(--blue);letter-spacing:.08em;text-transform:uppercase;text-align:center;margin-bottom:28px;}
+#line-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;width:100%;max-width:380px;}
 .line-btn{
-  aspect-ratio:1;border-radius:14px;border:1.5px solid rgba(0,176,255,.35);
+  aspect-ratio:1;border-radius:12px;border:1.5px solid rgba(0,176,255,.35);
   background:rgba(255,255,255,.05);
-  font-size:clamp(20px,3.4vh,30px);font-weight:900;color:#fff;cursor:pointer;
+  font-size:18px;font-weight:900;color:#fff;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
   transition:background .12s,border-color .12s,transform .1s,box-shadow .12s;
   -webkit-tap-highlight-color:transparent;
 }
 .line-btn:active{transform:scale(.92);background:var(--blue);border-color:var(--blue);color:var(--navy);box-shadow:0 0 0 4px rgba(0,176,255,.2);}
 
-/* ── TAP SCREEN (landscape 2-column) ── */
-#screen-tap{background:var(--navy);flex-direction:row;align-items:stretch;}
-
-#tap-left{
-  flex:1 1 52%;display:flex;align-items:center;justify-content:center;position:relative;
+/* ── TAP SCREEN ── */
+#screen-tap{background:var(--navy);padding:0;}
+#tap-header{
+  position:absolute;top:0;left:0;right:0;
+  padding:20px 24px 0;
+  display:flex;align-items:flex-start;justify-content:space-between;
 }
+#tap-line-label{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.45);}
+#tap-line-num{font-size:22px;font-weight:900;color:#fff;line-height:1.1;margin-top:2px;}
+#change-line{background:none;border:1.5px solid rgba(255,255,255,.2);border-radius:6px;padding:6px 12px;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.45);cursor:pointer;font-family:var(--ff);-webkit-tap-highlight-color:transparent;}
+#change-line:active{background:rgba(255,255,255,.08);}
+
 #tap-btn{
-  width:min(66vh,66vw);height:min(66vh,66vw);
+  width:min(72vw,300px);height:min(72vw,300px);
   border-radius:50%;background:var(--blue);border:none;cursor:pointer;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.6vh;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
   -webkit-tap-highlight-color:transparent;
   transition:transform .1s,background .12s;
   position:relative;overflow:hidden;
-  box-shadow:0 0 0 14px rgba(0,176,255,.18),0 0 0 28px rgba(0,176,255,.08);
+  box-shadow:0 0 0 12px rgba(0,176,255,.18),0 0 0 24px rgba(0,176,255,.08);
 }
 #tap-btn:active{transform:scale(.94);}
 #tap-btn.flash{background:#33c6ff;}
-#tap-btn-icon{width:60%;height:60%;object-fit:contain;pointer-events:none;user-select:none;margin-top:1vh;}
-#tap-btn-label{font-size:clamp(11px,1.7vh,15px);font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(0,66,112,.85);pointer-events:none;margin-bottom:.8vh;}
+#tap-btn-icon{width:64%;height:64%;object-fit:contain;pointer-events:none;user-select:none;margin-top:6px;}
+#tap-btn-label{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(0,66,112,.85);pointer-events:none;margin-bottom:4px;}
 
 .ripple{
   position:absolute;border-radius:50%;background:rgba(255,255,255,.25);
@@ -69,41 +65,15 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 }
 @keyframes ripple-out{to{transform:scale(2.5);opacity:0;}}
 
-#tap-right{
-  flex:1 1 48%;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  padding:3.4vh 5vw;position:relative;
-}
-/* Top strip: line label sits centered up top, change-line tucked to the corner */
-#tap-header{
-  position:absolute;top:3.4vh;left:0;right:0;padding:0 5vw;
-  display:flex;align-items:center;justify-content:center;
-}
-#tap-line-block{text-align:center;}
-#tap-line-label{font-size:clamp(9px,1.4vh,12px);font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.45);}
-#tap-line-num{font-size:clamp(22px,3.8vh,36px);font-weight:900;color:#fff;line-height:1.05;margin-top:.3vh;}
-#change-line{position:absolute;top:0;right:5vw;background:none;border:1.5px solid rgba(255,255,255,.2);border-radius:8px;padding:1vh 2.4vw;font-size:clamp(8px,1.2vh,10px);font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.45);cursor:pointer;font-family:var(--ff);-webkit-tap-highlight-color:transparent;white-space:nowrap;}
-#change-line:active{background:rgba(255,255,255,.08);}
+#tap-count-wrap{margin-top:32px;text-align:center;}
+#tap-count{font-size:clamp(48px,14vw,96px);font-weight:900;color:var(--white);letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums;}
+#tap-count-label{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-top:4px;}
 
-/* The count + its label are one centered unit on the panel's center axis */
-#tap-count-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
-#tap-count{font-size:clamp(72px,22vh,200px);font-weight:900;color:var(--white);letter-spacing:-.04em;line-height:.9;font-variant-numeric:tabular-nums;}
-#tap-count-label{font-size:clamp(11px,1.7vh,15px);font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-top:1.2vh;}
+#tap-footer{position:absolute;bottom:0;left:0;right:0;padding:0 24px 28px;text-align:center;}
+#tap-locked-msg{font-size:13px;font-weight:700;color:var(--blue);text-align:center;display:none;}
 
-#tap-locked-msg{font-size:clamp(14px,2.2vh,20px);font-weight:700;color:var(--blue);display:none;margin-top:1.6vh;text-align:center;}
-
-#conn-dot{position:absolute;top:3.9vh;right:calc(5vw - 16px);width:7px;height:7px;border-radius:50%;background:#3a3;transition:background .3s;}
+#conn-dot{position:absolute;top:22px;right:50%;transform:translateX(50%);width:6px;height:6px;border-radius:50%;background:#3a3;transition:background .3s;}
 #conn-dot.off{background:#a33;}
-
-/* Portrait fallback: if someone rotates, stack vertically so it never breaks */
-@media (orientation:portrait){
-  #screen-tap{flex-direction:column;}
-  #tap-left{flex:0 0 auto;padding-top:8vh;}
-  #tap-btn{width:min(72vw,300px);height:min(72vw,300px);}
-  #tap-right{flex:1;align-items:center;text-align:center;}
-  #tap-count-wrap{align-items:center;}
-  #line-grid{grid-template-columns:repeat(4,1fr);max-width:340px;}
-}
 </style>
 </head>
 <body>
@@ -122,28 +92,27 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 
 <!-- TAP SCREEN -->
 <div class="screen hidden" id="screen-tap">
-  <div id="tap-left">
-    <button id="tap-btn" aria-label="Tap for each bag packed">
-      <img id="tap-btn-icon" src="RBRbag.png" alt="Ready Bag" draggable="false">
-      <div id="tap-btn-label">Tap per bag</div>
-    </button>
+  <div id="tap-header">
+    <div>
+      <div id="tap-line-label">You are on</div>
+      <div id="tap-line-num">Line —</div>
+    </div>
+    <button id="change-line">Change line</button>
+  </div>
+  <div id="conn-dot"></div>
+
+  <button id="tap-btn" aria-label="Tap for each bag packed">
+    <img id="tap-btn-icon" src="RBRbag.png" alt="Ready Bag" draggable="false">
+    <div id="tap-btn-label">Tap per bag</div>
+  </button>
+
+  <div id="tap-count-wrap">
+    <div id="tap-count">0</div>
+    <div id="tap-count-label">bags from your line</div>
   </div>
 
-  <div id="tap-right">
-    <div id="conn-dot"></div>
-    <div id="tap-header">
-      <div id="tap-line-block">
-        <div id="tap-line-label">You are on</div>
-        <div id="tap-line-num">Line —</div>
-      </div>
-      <button id="change-line">Change line</button>
-    </div>
-
-    <div id="tap-count-wrap">
-      <div id="tap-count">0</div>
-      <div id="tap-count-label">bags from your line</div>
-      <div id="tap-locked-msg">16k Bags Completed! Thank you for being a part of it!</div>
-    </div>
+  <div id="tap-footer">
+    <div id="tap-locked-msg">🎉 16,000 bags packed — amazing work!</div>
   </div>
 </div>
 
@@ -152,7 +121,7 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 const SUPABASE_URL = 'https://advjuonmfxpjxxgmoycx.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFkdmp1b25tZnhwanh4Z21veWN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NzkyMjQsImV4cCI6MjA5NTU1NTIyNH0.hgAlqocR8DSTHNGg_fdG6nWW6NQ6t_K2RD7D4sdXPGc';
 const GOAL = 16000;
-const LINES = 16;
+const LINES = 40;
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
@@ -274,27 +243,6 @@ sb.channel('conn-check')
 
 // Fallback refresh every 30s
 setInterval(() => { if (selectedLine) refreshLineCount(); }, 30000);
-
-// ── PWA: register service worker + keep screen awake ──────────
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW reg failed', e));
-  });
-}
-
-// Keep the tablet awake while the app is open (Fire supports Wake Lock in recent Fire OS)
-let wakeLock = null;
-async function requestWakeLock() {
-  try {
-    if ('wakeLock' in navigator) {
-      wakeLock = await navigator.wakeLock.request('screen');
-    }
-  } catch (e) { /* ignore */ }
-}
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') requestWakeLock();
-});
-requestWakeLock();
 </script>
 </body>
 </html>
