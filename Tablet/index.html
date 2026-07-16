@@ -11,7 +11,16 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="apple-touch-icon" href="icon-192.png">
+
+<!-- Explicit icon links: Fire's Firefox shortcut-maker grabs these directly
+     even when it ignores the manifest icons. Multiple rel types + sizes so
+     whichever one it looks for, it finds a real icon (not the auto favicon). -->
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="shortcut icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-512.png">
+<link rel="apple-touch-icon" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="icon-512.png">
 
 <link rel="preconnect" href="https://fonts.bunny.net">
 <link href="https://fonts.bunny.net/css?family=source-sans-3:400,600,700,900&display=swap" rel="stylesheet">
@@ -104,10 +113,11 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
   #tap-left{
     flex:0 0 auto;width:100%;
     padding-top:6vh;padding-bottom:1vh;
+    position:relative;z-index:2;
   }
   #tap-btn{
     width:min(74vw,74vh,420px);height:min(74vw,74vh,420px);
-    gap:2vh;
+    gap:2vh;position:relative;z-index:3;
     box-shadow:0 0 0 16px rgba(0,176,255,.18),0 0 0 32px rgba(0,176,255,.08);
   }
   #tap-btn-icon{width:62%;height:62%;margin-top:1.4vh;}
@@ -116,30 +126,30 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
   #tap-right{
     flex:1;width:100%;
     align-items:center;justify-content:flex-start;text-align:center;
-    padding:0 6vw;position:relative;
+    padding:0 6vw;position:relative;z-index:1;
   }
   /* Line info: static block right under the button (not absolute) */
   #tap-header{
-    position:static;padding:0;margin-top:2.4vh;
+    position:static;padding:0;margin-top:3vh;
     flex-direction:column;gap:.4vh;
-  }
-  #change-line{
-    position:static;margin:1.4vh auto 0;
-    padding:1.2vh 5vw;font-size:clamp(9px,1.4vh,11px);
   }
   #tap-line-num{font-size:clamp(30px,5vh,48px);}
   #tap-line-label{font-size:clamp(10px,1.5vh,13px);}
 
   /* Count dominates the lower half */
   #tap-count-wrap{
-    flex:1;justify-content:center;margin-top:-2vh;
+    flex:1;justify-content:center;
   }
   #tap-count{font-size:clamp(120px,30vh,320px);}
   #tap-count-label{font-size:clamp(13px,2vh,18px);margin-top:1.6vh;}
 
-  /* Connection dot: tuck near the change-line button */
-  #conn-dot{top:auto;right:auto;position:static;
-    margin:1.6vh auto 0;}
+  /* Change line: bottom-right, level with the count label */
+  #change-line{
+    position:absolute;bottom:4vh;right:6vw;top:auto;left:auto;margin:0;
+    padding:1.4vh 5vw;font-size:clamp(9px,1.4vh,11px);z-index:4;
+  }
+  /* Connection dot: bottom-left mirror */
+  #conn-dot{position:absolute;bottom:calc(4vh + 1.4vh);left:6vw;top:auto;right:auto;margin:0;}
 
   #line-grid{grid-template-columns:repeat(4,1fr);max-width:360px;}
 }
