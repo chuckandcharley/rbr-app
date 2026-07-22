@@ -56,10 +56,10 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
    ════════════════════════════════════════════════════════════ */
 #screen-tap{background:var(--navy);flex-direction:row;align-items:stretch;}
 
-/* ── Left column: button + hint side by side ── */
+/* ── Left column: just the button ── */
 #tap-left{
-  flex:1 1 50%;display:flex;flex-direction:row;align-items:center;justify-content:center;
-  position:relative;gap:4vw;padding:2vh 2vw 2vh 4vw;
+  flex:1 1 50%;display:flex;align-items:center;justify-content:center;
+  position:relative;padding:2vh;
 }
 #tap-btn{
   /* Big circle — uses vh for both axes so it's always round regardless of window shape */
@@ -76,22 +76,28 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 #tap-btn.flash{background:#33c6ff;}
 #tap-btn-icon{width:46%;height:46%;object-fit:contain;pointer-events:none;user-select:none;}
 
-/* Arrow + helper text to the RIGHT of the button, vertically centered */
+/* Hand-drawn arrow + "Press here" under the count label */
 #tap-hint{
-  display:flex;flex-direction:column;align-items:center;gap:.6vh;
+  display:flex;flex-direction:column;align-items:center;gap:.8vh;
+  margin-top:2vh;
   pointer-events:none;
   animation:hint-pulse 2.4s ease-in-out infinite;
-}
-#tap-hint-arrow{
-  font-size:clamp(44px,10vh,80px);line-height:1;color:var(--blue);
+  overflow:visible;
 }
 #tap-hint-text{
-  font-size:clamp(15px,2.8vh,24px);font-weight:700;letter-spacing:.1em;
-  text-transform:uppercase;color:rgba(0,176,255,.65);white-space:nowrap;
+  font-size:clamp(16px,3vh,26px);font-weight:700;letter-spacing:.1em;
+  text-transform:uppercase;color:rgba(0,176,255,.7);white-space:nowrap;
+}
+#tap-hint-arrow{
+  width:clamp(200px,42vw,480px);height:auto;
+  color:var(--blue);opacity:.65;
+  overflow:visible;
+  /* Shift left so the tip reaches past the panel edge toward the button */
+  margin-left:clamp(-100px,-20vw,-200px);
 }
 @keyframes hint-pulse{
   0%,100%{opacity:.5;transform:translateX(0);}
-  50%{opacity:1;transform:translateX(-4px);}
+  50%{opacity:1;transform:translateX(-8px);}
 }
 
 .ripple{
@@ -105,26 +111,27 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
   flex:1 1 50%;display:flex;flex-direction:column;
   align-items:center;justify-content:center;
   padding:3vh 4vw;position:relative;
+  overflow:visible;
 }
 
 /* Line label + change button header strip */
 #tap-header{
   position:absolute;top:3vh;left:0;right:0;padding:0 4vw;
-  display:flex;align-items:center;justify-content:center;
+  display:flex;align-items:center;justify-content:space-between;
 }
-#tap-line-block{text-align:center;}
+#tap-line-block{text-align:center;flex:1;min-width:0;}
 #tap-line-label{font-size:clamp(9px,1.4vh,12px);font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.45);}
 #tap-line-num{font-size:clamp(22px,4vh,38px);font-weight:900;color:#fff;line-height:1.05;margin-top:.3vh;}
-#change-line{position:absolute;top:0;right:4vw;background:none;border:1.5px solid rgba(255,255,255,.2);border-radius:8px;padding:1vh 2vw;font-size:clamp(8px,1.2vh,10px);font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.45);cursor:pointer;font-family:var(--ff);-webkit-tap-highlight-color:transparent;white-space:nowrap;}
+#change-line{flex-shrink:0;background:none;border:1.5px solid rgba(255,255,255,.2);border-radius:8px;padding:1vh 2vw;font-size:clamp(8px,1.2vh,10px);font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.45);cursor:pointer;font-family:var(--ff);-webkit-tap-highlight-color:transparent;white-space:nowrap;}
 #change-line:active{background:rgba(255,255,255,.08);}
 
-/* Count — sized in vw so it physically cannot leave the right panel */
+/* Count — 8vw keeps it inside the right half even at 5+ digits */
 #tap-count-wrap{
   display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
-  width:100%;padding:0 2vw;
+  width:100%;padding:0 2vw;overflow:visible;
 }
 #tap-count{
-  font-size:clamp(48px,12vw,160px);
+  font-size:clamp(48px,8vw,130px);
   font-weight:900;color:var(--white);letter-spacing:-.04em;
   line-height:.9;font-variant-numeric:tabular-nums;
 }
@@ -158,11 +165,6 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
     <button id="tap-btn" aria-label="Tap for each bag packed">
       <img id="tap-btn-icon" src="RBRbag.png" alt="Ready Bag" draggable="false">
     </button>
-    <!-- Arrow + helper text to the right of button, pointing left at it -->
-    <div id="tap-hint">
-      <div id="tap-hint-arrow">&#x2190;</div>
-      <div id="tap-hint-text">Press here</div>
-    </div>
   </div>
 
   <div id="tap-right">
@@ -178,6 +180,14 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
     <div id="tap-count-wrap">
       <div id="tap-count">0</div>
       <div id="tap-count-label">bags from your line</div>
+      <!-- Hand-drawn arrow + press here, sweeping left toward the button -->
+      <div id="tap-hint">
+        <div id="tap-hint-text">Press here</div>
+        <svg id="tap-hint-arrow" viewBox="0 0 220 50" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+          <path d="M210,25 C170,25 110,24 60,26 Q30,28 12,25" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M30,14 L10,25 L30,36" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
       <div id="tap-locked-msg">16k Bags Completed! Thank you for being a part of it!</div>
     </div>
   </div>
