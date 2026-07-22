@@ -2,10 +2,10 @@
 // Purpose: make the app installable (fullscreen, no browser bar) and let the
 // shell load instantly / survive brief network drops. Supabase calls always
 // go to the network — we never cache live count data.
- 
+
 // IMPORTANT: bump the cache name any time you deploy new files so tablets
 // pick up changes immediately instead of serving the old cached shell.
-const CACHE = 'rbr-v2';
+const CACHE = 'rbr-v3';
 const SHELL = [
   'index.html',
   'manifest.json',
@@ -13,7 +13,7 @@ const SHELL = [
   'icon-192.png',
   'icon-512.png'
 ];
- 
+
 self.addEventListener('install', (e) => {
   self.skipWaiting();
   e.waitUntil(
@@ -22,7 +22,7 @@ self.addEventListener('install', (e) => {
     )
   );
 });
- 
+
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) =>
@@ -30,7 +30,7 @@ self.addEventListener('activate', (e) => {
     ).then(() => self.clients.claim())
   );
 });
- 
+
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   // Never cache Supabase / API / fonts CDN — always hit the network.
