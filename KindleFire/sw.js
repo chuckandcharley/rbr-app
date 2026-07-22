@@ -5,7 +5,7 @@
 
 // IMPORTANT: bump the cache name any time you deploy new files so tablets
 // pick up changes immediately instead of serving the old cached shell.
-const CACHE = 'rbr-v4';
+const CACHE = 'rbr-v5';
 const SHELL = [
   'index.html',
   'manifest.json',
