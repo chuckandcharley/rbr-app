@@ -62,7 +62,7 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
   position:relative;gap:3vw;padding:2vh 1.5vw 2vh 2vh;
 }
 #tap-btn{
-  /* Big circle but max-width/height prevent clipping against edges */
+  /* Big circle — uses vh for both axes so it's always round regardless of window shape */
   width:min(78vh,46vw);height:min(78vh,46vw);
   max-width:calc(50vw - 48px);max-height:calc(100vh - 80px);
   border-radius:50%;background:var(--blue);border:none;cursor:pointer;
@@ -133,54 +133,7 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 #conn-dot{position:absolute;top:3.4vh;right:calc(4vw - 14px);width:7px;height:7px;border-radius:50%;background:#3a3;transition:background .3s;}
 #conn-dot.off{background:#a33;}
 
-/* ════════════════════════════════════════════════════════════
-   PORTRAIT FALLBACK
-   If somehow orientation unlocks or on a phone, stack vertically.
-   ════════════════════════════════════════════════════════════ */
-@media (orientation:portrait){
-  #screen-tap{flex-direction:column;justify-content:flex-start;padding:0;}
 
-  #tap-left{
-    flex:0 0 auto;width:100%;flex-direction:column;gap:1.2vh;
-    padding:4vh 2vh 0 2vh;
-    position:relative;z-index:2;
-  }
-  #tap-btn{
-    width:min(78vw,78vh,420px);height:min(78vw,78vh,420px);
-    max-width:calc(100vw - 40px);max-height:calc(100vw - 40px);
-    gap:2vh;position:relative;z-index:3;
-    box-shadow:0 0 0 10px rgba(0,176,255,.18),0 0 0 22px rgba(0,176,255,.08);
-  }
-  #tap-btn-icon{width:58%;height:58%;margin-top:1.4vh;}
-  #tap-btn-label{font-size:clamp(13px,2.1vh,18px);margin-bottom:1vh;}
-
-  #tap-hint{flex-direction:row;gap:1.2vw;margin-top:.4vh;}
-  #tap-hint-arrow{font-size:clamp(24px,4vh,40px);}
-
-  #tap-right{
-    flex:1;width:100%;
-    align-items:center;justify-content:flex-start;text-align:center;
-    padding:0 6vw;position:relative;z-index:1;
-  }
-  #tap-header{
-    position:static;padding:0;margin-top:2vh;
-    flex-direction:column;gap:.4vh;
-  }
-  #tap-line-num{font-size:clamp(30px,5vh,48px);}
-  #tap-line-label{font-size:clamp(10px,1.5vh,13px);}
-
-  #tap-count-wrap{flex:1;justify-content:center;}
-  #tap-count{font-size:clamp(130px,34vh,360px);}
-  #tap-count-label{font-size:clamp(14px,2.2vh,20px);margin-top:1.6vh;}
-
-  #change-line{
-    position:absolute;bottom:4vh;right:6vw;top:auto;left:auto;margin:0;
-    padding:1.4vh 5vw;font-size:clamp(9px,1.4vh,11px);z-index:4;
-  }
-  #conn-dot{position:absolute;bottom:calc(4vh + 1.4vh);left:6vw;top:auto;right:auto;margin:0;}
-
-  #line-grid{grid-template-columns:repeat(4,1fr);max-width:360px;}
-}
 </style>
 </head>
 <body>
@@ -418,6 +371,20 @@ async function requestWakeLock() {
   } catch (e) { /* ignore */ }
 }
 requestWakeLock();
+
+// ── Force landscape via Screen Orientation API ──
+// The manifest "orientation":"landscape" only works if the browser
+// respects it at install time. This JS call forces it at runtime
+// as a belt-and-suspenders fallback for Fire OS.
+function lockLandscape() {
+  const so = screen.orientation;
+  if (so && so.lock) {
+    so.lock('landscape').catch(() => {});
+  }
+}
+lockLandscape();
+// Re-lock after fullscreen changes (some browsers release the lock)
+document.addEventListener('fullscreenchange', lockLandscape);
 </script>
 </body>
 </html>
