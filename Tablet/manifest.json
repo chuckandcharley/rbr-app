@@ -1,6 +1,6 @@
 {
   "name": "Ready Bag Rally",
-  "short_name": "Ready Bag Rally",
+  "short_name": "RBR",
   "description": "Tap once per bag packed. Live count per line.",
   "start_url": "index.html",
   "scope": "./",
