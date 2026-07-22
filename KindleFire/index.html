@@ -59,7 +59,7 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 /* ── Left column: button + hint side by side ── */
 #tap-left{
   flex:1 1 50%;display:flex;flex-direction:row;align-items:center;justify-content:center;
-  position:relative;gap:3vw;padding:2vh 1.5vw 2vh 2vh;
+  position:relative;gap:4vw;padding:2vh 2vw 2vh 4vw;
 }
 #tap-btn{
   /* Big circle — uses vh for both axes so it's always round regardless of window shape */
@@ -74,7 +74,7 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 }
 #tap-btn:active{transform:scale(.94);}
 #tap-btn.flash{background:#33c6ff;}
-#tap-btn-icon{width:56%;height:56%;object-fit:contain;pointer-events:none;user-select:none;margin-top:.8vh;}
+#tap-btn-icon{width:46%;height:46%;object-fit:contain;pointer-events:none;user-select:none;margin-top:.8vh;}
 #tap-btn-label{font-size:clamp(12px,2vh,18px);font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(0,66,112,.85);pointer-events:none;margin-bottom:.6vh;}
 
 /* Arrow + helper text to the RIGHT of the button, vertically centered */
@@ -119,12 +119,16 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 #change-line{position:absolute;top:0;right:4vw;background:none;border:1.5px solid rgba(255,255,255,.2);border-radius:8px;padding:1vh 2vw;font-size:clamp(8px,1.2vh,10px);font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.45);cursor:pointer;font-family:var(--ff);-webkit-tap-highlight-color:transparent;white-space:nowrap;}
 #change-line:active{background:rgba(255,255,255,.08);}
 
-/* Count — the star of the right panel */
-#tap-count-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+/* Count — the star of the right panel, must always fit */
+#tap-count-wrap{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+  width:100%;max-width:100%;overflow:hidden;padding:0 2vw;
+}
 #tap-count{
-  font-size:clamp(120px,38vh,340px);
+  font-size:clamp(60px,22vh,200px);
   font-weight:900;color:var(--white);letter-spacing:-.04em;
   line-height:.9;font-variant-numeric:tabular-nums;
+  max-width:100%;overflow:hidden;
 }
 #tap-count-label{font-size:clamp(13px,2.2vh,20px);font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-top:1.2vh;}
 
@@ -234,6 +238,26 @@ function playTick() {
   osc.stop(now + 0.03);
 }
 
+// ── Auto-fitting count display ──
+// Shrinks the font until the number fits its container width.
+const countEl = document.getElementById('tap-count');
+const countWrap = document.getElementById('tap-count-wrap');
+
+function updateCount(val) {
+  countEl.textContent = val.toLocaleString();
+  // Reset to CSS default size then shrink if needed
+  countEl.style.fontSize = '';
+  requestAnimationFrame(() => {
+    const maxW = countWrap.clientWidth;
+    let size = parseFloat(getComputedStyle(countEl).fontSize);
+    // Shrink in steps until it fits (with a floor so it never vanishes)
+    while (countEl.scrollWidth > maxW && size > 40) {
+      size -= 4;
+      countEl.style.fontSize = size + 'px';
+    }
+  });
+}
+
 // ── Tap ──
 const tapBtn = document.getElementById('tap-btn');
 
@@ -258,13 +282,13 @@ tapBtn.addEventListener('pointerdown', async (e) => {
 
   // Optimistic UI
   lineCount++;
-  document.getElementById('tap-count').textContent = lineCount.toLocaleString();
+  updateCount(lineCount);
 
   try {
     const { data, error } = await sb.rpc('increment_line', { line_id: selectedLine });
     if (error) throw error;
     lineCount = data.new_count;
-    document.getElementById('tap-count').textContent = lineCount.toLocaleString();
+    updateCount(lineCount);
     if (data.total >= GOAL) setLocked(true);
   } catch (err) {
     console.error(err);
@@ -284,7 +308,7 @@ async function refreshLineCount() {
       .single();
     if (error) throw error;
     lineCount = data.count;
-    document.getElementById('tap-count').textContent = lineCount.toLocaleString();
+    updateCount(lineCount);
   } catch (err) {
     console.error(err);
   }
@@ -325,7 +349,7 @@ sb.channel('tablet-lines')
     (payload) => {
       if (payload.new.id === selectedLine) {
         lineCount = payload.new.count;
-        document.getElementById('tap-count').textContent = lineCount.toLocaleString();
+        updateCount(lineCount);
       }
     }
   )
