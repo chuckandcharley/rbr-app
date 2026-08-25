@@ -84,9 +84,22 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
   animation:hint-pulse 2.4s ease-in-out infinite;
   overflow:visible;
 }
-#tap-hint-text{
-  font-size:clamp(16px,3vh,26px);font-weight:700;letter-spacing:.1em;
-  text-transform:uppercase;color:rgba(0,176,255,.7);white-space:nowrap;
+/* "PRESS HERE" set on a concave-up arc inside the bottom of the button.
+   Sits ~9% in from the edge and well clear of the bag artwork (which
+   occupies the middle 46%), so it reads as part of the button, not a
+   floating label. Font size / letter-spacing are viewBox units = % of
+   the button, so it scales with the circle on any screen. */
+#tap-btn-label{
+  position:absolute;inset:0;width:100%;height:100%;
+  pointer-events:none;overflow:visible;
+  animation:label-pulse 2.4s ease-in-out infinite;
+}
+#tap-btn-label text{
+  fill:#fff;font-family:var(--ff);font-size:6px;font-weight:800;letter-spacing:1.5px;
+}
+@keyframes label-pulse{
+  0%,100%{opacity:.8;}
+  50%{opacity:1;}
 }
 #tap-hint-arrow{
   width:clamp(200px,42vw,480px);height:auto;
@@ -162,8 +175,21 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 <!-- TAP SCREEN -->
 <div class="screen hidden" id="screen-tap">
   <div id="tap-left">
-    <button id="tap-btn" aria-label="Tap for each bag packed">
+    <button id="tap-btn" aria-label="Press here for each bag packed">
       <img id="tap-btn-icon" src="RBRbag.png" alt="Ready Bag" draggable="false">
+      <!-- "PRESS HERE" curved along the lower inside edge of the circle.
+           viewBox is 100x100 so every value below is a % of the button, which
+           keeps the label locked to the same spot at any tablet size. -->
+      <svg id="tap-btn-label" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"
+           xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" focusable="false">
+        <defs>
+          <!-- Concave-up arc at radius 41 (9% in from the button edge) -->
+          <path id="tap-btn-label-arc" d="M14.5,70.5 A41,41 0 0 0 85.5,70.5" fill="none"/>
+        </defs>
+        <text text-anchor="middle">
+          <textPath href="#tap-btn-label-arc" xlink:href="#tap-btn-label-arc" startOffset="50%">PRESS HERE</textPath>
+        </text>
+      </svg>
     </button>
   </div>
 
@@ -180,15 +206,15 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
     <div id="tap-count-wrap">
       <div id="tap-count">0</div>
       <div id="tap-count-label">bags from your line</div>
-      <!-- Hand-drawn arrow + press here, sweeping left toward the button -->
+      <!-- Hand-drawn arrow sweeping left toward the button. The words now
+           live inside the button itself, so this is just the gesture. -->
       <div id="tap-hint">
-        <div id="tap-hint-text">Press here</div>
         <svg id="tap-hint-arrow" viewBox="0 0 220 50" xmlns="http://www.w3.org/2000/svg" overflow="visible">
           <path d="M210,25 C170,25 110,24 60,26 Q30,28 12,25" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
           <path d="M30,14 L10,25 L30,36" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </div>
-      <div id="tap-locked-msg">16k Bags Completed! Thank you for being a part of it!</div>
+      <div id="tap-locked-msg">1,000 Bags Completed! Thank you for being a part of it!</div>
     </div>
   </div>
 </div>
@@ -197,7 +223,7 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 <script>
 const SUPABASE_URL = 'https://advjuonmfxpjxxgmoycx.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFkdmp1b25tZnhwanh4Z21veWN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NzkyMjQsImV4cCI6MjA5NTU1NTIyNH0.hgAlqocR8DSTHNGg_fdG6nWW6NQ6t_K2RD7D4sdXPGc';
-const GOAL = 16000;
+const GOAL = 1000;
 const LINES = 16;
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
@@ -324,6 +350,8 @@ function setLocked(val) {
   tapBtn.style.pointerEvents = val ? 'none' : 'all';
   document.getElementById('tap-locked-msg').style.display = val ? 'block' : 'none';
   document.getElementById('tap-hint').style.display = val ? 'none' : 'flex';
+  // Don't leave "PRESS HERE" sitting on a dimmed, dead button.
+  document.getElementById('tap-btn-label').style.display = val ? 'none' : 'block';
 }
 
 // ── REALTIME: listen for changes to the lines table ──
