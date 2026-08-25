@@ -37,7 +37,12 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 
 /* CONFETTI */
 
-#confetti-canvas{position:fixed;inset:0;z-index:60;pointer-events:none;}
+/* width/height 100% is load-bearing, not decoration. A <canvas> is a
+   replaced element with an intrinsic size, so position:fixed + inset:0
+   alone does NOT stretch it — the browser uses the backing-store size
+   and pins it top-left. That's what caused confetti to cover only part
+   of the screen after entering fullscreen. */
+#confetti-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:60;pointer-events:none;}
 
 /* CONNECTION */
 #conn{position:fixed;bottom:14px;right:16px;width:8px;height:8px;border-radius:50%;background:#3a3;transition:background .3s;}
@@ -63,7 +68,7 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 <script>
 const SUPABASE_URL = 'https://advjuonmfxpjxxgmoycx.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFkdmp1b25tZnhwanh4Z21veWN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NzkyMjQsImV4cCI6MjA5NTU1NTIyNH0.hgAlqocR8DSTHNGg_fdG6nWW6NQ6t_K2RD7D4sdXPGc';
-const GOAL = 1000;
+let GOAL = 1000;   // let, so ?goal=N can override it for rehearsals
 let counts = new Array(40).fill(0);
 let lastTotal = 0;
 let celebrationFired = false;
@@ -115,65 +120,188 @@ function applyState() {
   lastTotal = total;
 }
 
-let confettiRunning = false;
-let confettiFrameId = null;
-let confettiParticles = null;
-let confettiCanvas = null;
-let confettiCtx = null;
+/* ════════════════════════════════════════════════════════════
+   CONFETTI — hardened for big walls and low-power players
+   ────────────────────────────────────────────────────────────
+   Four things went wrong before, all fixed here:
+   1. Motion was per-FRAME (p.y += p.vy), so a slow frame froze the
+      fall mid-air and resumed from the same spot. Now it's per-SECOND
+      with a clamp, so a hitch becomes a brief slow-down, never a
+      freeze and never a teleport.
+   2. The backing store was window-sized, so a 4K player made us clear
+      and repaint 8.3M pixels a frame. Now it's capped; CSS upscales.
+   3. Size was read once at start, so resizing or going fullscreen left
+      confetti stranded in a corner. Now it re-fits itself every frame.
+   4. Every recycled particle allocated a new object AND a new color
+      array, feeding the GC. Now the pool is fixed and reused in place.
+   ════════════════════════════════════════════════════════════ */
 
-function makeParticle(canvas, randomizeY) {
-  const COLORS = ['#00b0ff','#004270','#0378ad','#ffffff','#f3f9fd','#7fd4ff'];
-  return {
-    x: Math.random() * canvas.width,
-    y: randomizeY ? Math.random() * canvas.height : -20 - Math.random() * canvas.height * 0.3,
-    w: 6 + Math.random() * 8, h: 10 + Math.random() * 6,
-    color: COLORS[Math.floor(Math.random() * COLORS.length)],
-    rot: Math.random() * Math.PI * 2,
-    rotV: (Math.random() - 0.5) * 0.12,
-    vx: (Math.random() - 0.5) * 2.5,
-    vy: 2.5 + Math.random() * 3.5,
-    opacity: 0.85 + Math.random() * 0.15,
-  };
+const CONFETTI_COLORS = ['#00b0ff','#004270','#0378ad','#ffffff','#f3f9fd','#7fd4ff'];
+const CONFETTI_MAX = 260;          // pool ceiling — never allocated past this
+const CONFETTI_MIN_ACTIVE = 60;    // floor the auto-throttle won't go below
+const MAX_BACKING_PX = 2600000;    // ~1080p at 1.5x — the per-frame pixel budget
+
+const cf = {
+  canvas: null, ctx: null,
+  pool: [], active: 0,
+  w: 0, h: 0, scale: 1, sizeScale: 1,
+  running: false, raf: null, last: 0, slowFrames: 0
+};
+
+/* Fit the canvas to the viewport. Called on load, on resize/fullscreen,
+   and defensively from inside the frame loop — some browsers (and most
+   TV/stick browsers) never fire a resize event on a fullscreen change,
+   which is exactly why the old version needed a manual refresh. */
+function fitConfetti() {
+  const c = cf.canvas;
+  if (!c) return;
+  const cssW = Math.max(1, window.innerWidth);
+  const cssH = Math.max(1, window.innerHeight);
+
+  // Respect DPR up to 2x, then shrink to stay inside the pixel budget.
+  let scale = Math.min(window.devicePixelRatio || 1, 2);
+  const px = cssW * cssH * scale * scale;
+  if (px > MAX_BACKING_PX) scale *= Math.sqrt(MAX_BACKING_PX / px);
+  scale = Math.max(0.25, scale);
+
+  const bw = Math.round(cssW * scale);
+  const bh = Math.round(cssH * scale);
+  if (c.width !== bw || c.height !== bh) { c.width = bw; c.height = bh; }
+
+  const oldW = cf.w, oldH = cf.h;
+  cf.w = cssW; cf.h = cssH; cf.scale = scale;
+
+  // Bigger screen = bigger, faster flakes, so they read the same from
+  // the back of the room instead of turning into 6px dust.
+  cf.sizeScale = Math.min(2.5, Math.max(0.8, Math.min(cssW, cssH) / 800));
+
+  // Density from area, not a hardcoded 220.
+  const want = Math.round((cssW * cssH) / 14000);
+  cf.active = Math.min(CONFETTI_MAX, Math.max(90, want));
+
+  // Grow the pool once; entries are reused forever after.
+  while (cf.pool.length < CONFETTI_MAX) cf.pool.push({});
+
+  // Keep in-flight particles where they were, proportionally.
+  if (oldW && oldH) {
+    const fx = cssW / oldW, fy = cssH / oldH;
+    for (let i = 0; i < cf.pool.length; i++) {
+      const p = cf.pool[i];
+      if (p.x === undefined) continue;
+      p.x *= fx; p.y *= fy;
+    }
+  }
+
+  // Setting .width resets all context state, so re-establish it after.
+  cf.ctx = c.getContext('2d');
+  cf.ctx.setTransform(scale, 0, 0, scale, 0, 0);
+}
+
+/* Reuse an existing object — no allocation, no garbage, no GC pauses.
+   Velocities are px/sec and rad/sec, matching the old 60fps feel. */
+function resetParticle(p, spread) {
+  const s = cf.sizeScale;
+  p.x = Math.random() * cf.w;
+  p.y = spread ? Math.random() * cf.h : -20 - Math.random() * cf.h * 0.3;
+  p.w = (6 + Math.random() * 8) * s;
+  p.h = (10 + Math.random() * 6) * s;
+  p.color = CONFETTI_COLORS[(Math.random() * CONFETTI_COLORS.length) | 0];
+  p.rot = Math.random() * Math.PI * 2;
+  p.rotV = (Math.random() - 0.5) * 7.2;
+  p.vx = (Math.random() - 0.5) * 150 * s;
+  p.vy = (150 + Math.random() * 210) * s;
+  p.opacity = 0.85 + Math.random() * 0.15;
 }
 
 function startConfetti() {
-  if (confettiRunning) return;
-  confettiCanvas = document.getElementById('confetti-canvas');
-  confettiCtx = confettiCanvas.getContext('2d');
-  confettiCanvas.width = window.innerWidth;
-  confettiCanvas.height = window.innerHeight;
-  confettiParticles = Array.from({ length: 220 }, () => makeParticle(confettiCanvas, true));
-  confettiRunning = true;
-
-  function frame() {
-    if (!confettiRunning) return;
-    confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
-    confettiParticles.forEach(p => {
-      p.x += p.vx; p.y += p.vy; p.rot += p.rotV;
-      if (p.y > confettiCanvas.height + 20) {
-        const fresh = makeParticle(confettiCanvas, false);
-        Object.assign(p, fresh);
-      }
-      confettiCtx.save();
-      confettiCtx.translate(p.x, p.y);
-      confettiCtx.rotate(p.rot);
-      confettiCtx.globalAlpha = p.opacity;
-      confettiCtx.fillStyle = p.color;
-      confettiCtx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
-      confettiCtx.restore();
-    });
-    confettiFrameId = requestAnimationFrame(frame);
-  }
-  confettiFrameId = requestAnimationFrame(frame);
+  if (cf.running) return;
+  cf.canvas = document.getElementById('confetti-canvas');
+  fitConfetti();
+  for (let i = 0; i < cf.pool.length; i++) resetParticle(cf.pool[i], true);
+  cf.running = true;
+  cf.last = performance.now();
+  cf.slowFrames = 0;
+  cf.raf = requestAnimationFrame(confettiFrame);
 }
 
 function stopConfetti() {
-  confettiRunning = false;
-  if (confettiFrameId) cancelAnimationFrame(confettiFrameId);
-  if (confettiCtx && confettiCanvas) {
-    confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
-  }
+  cf.running = false;
+  if (cf.raf) cancelAnimationFrame(cf.raf);
+  cf.raf = null;
+  if (cf.ctx) cf.ctx.clearRect(0, 0, cf.w, cf.h);
 }
+
+function confettiFrame(now) {
+  if (!cf.running) return;
+
+  // Catch a fullscreen/resolution change even with no resize event.
+  if (window.innerWidth !== cf.w || window.innerHeight !== cf.h) fitConfetti();
+
+  let dt = (now - cf.last) / 1000;
+  cf.last = now;
+  if (!(dt > 0)) dt = 1 / 60;
+  if (dt > 0.05) dt = 0.05;   // the anti-teleport clamp
+
+  // Watchdog: if the machine genuinely can't keep up, thin the confetti
+  // rather than letting it stutter. Downgrade only, so it never flaps.
+  if (dt * 1000 > 33) {
+    if (++cf.slowFrames > 90 && cf.active > CONFETTI_MIN_ACTIVE) {
+      cf.active = Math.max(CONFETTI_MIN_ACTIVE, Math.round(cf.active * 0.8));
+      cf.slowFrames = 0;
+    }
+  } else if (cf.slowFrames > 0) {
+    cf.slowFrames--;
+  }
+
+  const ctx = cf.ctx, s = cf.scale;
+  ctx.setTransform(s, 0, 0, s, 0, 0);
+  ctx.clearRect(0, 0, cf.w, cf.h);
+
+  for (let i = 0; i < cf.active; i++) {
+    const p = cf.pool[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.rot += p.rotV * dt;
+    // Wrap sideways instead of letting drift carry flakes off the edges
+    // forever — over a long celebration that quietly thinned the middle.
+    if (p.x < -40) p.x += cf.w + 80;
+    else if (p.x > cf.w + 40) p.x -= cf.w + 80;
+    if (p.y > cf.h + 20) resetParticle(p, false);
+
+    // One setTransform instead of save/translate/rotate/restore.
+    const cos = Math.cos(p.rot), sin = Math.sin(p.rot);
+    ctx.setTransform(s * cos, s * sin, -s * sin, s * cos, s * p.x, s * p.y);
+    ctx.globalAlpha = p.opacity;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+  }
+
+  ctx.setTransform(s, 0, 0, s, 0, 0);
+  ctx.globalAlpha = 1;
+  cf.raf = requestAnimationFrame(confettiFrame);
+}
+
+// Size the canvas up front so the first celebration frame is already
+// correct, and re-fit on every event that can change the viewport.
+cf.canvas = document.getElementById('confetti-canvas');
+fitConfetti();
+['resize', 'orientationchange'].forEach(ev => window.addEventListener(ev, fitConfetti));
+document.addEventListener('fullscreenchange', fitConfetti);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', fitConfetti);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') { cf.last = performance.now(); fitConfetti(); }
+});
+
+/* ── Rehearsal hooks (URL-only, nothing on the keyboard) ──
+   ?confetti=1  start the celebration immediately on load
+   ?goal=25     lower the scoreboard goal for a dry run
+   Neither can be triggered by accident — the live URL stays clean.  */
+const _q = new URLSearchParams(location.search);
+if (_q.get('goal')) {
+  const g = parseInt(_q.get('goal'), 10);
+  if (g > 0) GOAL = g;
+}
+if (_q.get('confetti')) startConfetti();
 
 loadAll();
 </script>
