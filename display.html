@@ -1,1 +1,354 @@
-old
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ready Bag Rally</title>
+<link rel="preconnect" href="https://fonts.bunny.net">
+<link href="https://fonts.bunny.net/css?family=source-sans-3:400,600,700,900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#004270;--blue:#00b0ff;--gold:#00b0ff;--bg:#002d50;
+  --ff:'Source Sans 3','Arial Narrow',Arial,sans-serif;
+}
+html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);overflow:hidden;color:#fff;}
+
+#layout{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100vw;height:100vh;position:relative;padding:64px;}
+
+#event-label{font-size:20px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:18px;}
+#total-label{
+  font-size:clamp(48px,6vw,96px);font-weight:600;letter-spacing:.06em;
+  color:rgba(255,255,255,.4);line-height:1;text-align:center;
+  margin-bottom:16px;
+}
+/* The lower bound used to be 200px, set when the number topped out at
+   "1,000" — five glyphs. "16,000" is six, so on any window under about
+   900px the number pushed past the padding and got clipped by
+   overflow:hidden. Only the min changed; on a wall display 22vw still
+   wins, so the projected size is exactly as before. */
+#total-num{
+  font-size:clamp(96px,22vw,420px);font-weight:900;letter-spacing:-.04em;
+  color:#fff;line-height:1;font-variant-numeric:tabular-nums;text-align:center;
+  transition:transform .12s cubic-bezier(0.34,1.6,0.64,1);
+}
+#total-num.bump{transform:scale(1.05);}
+#total-goal{font-size:34px;font-weight:700;color:rgba(255,255,255,.4);margin-top:16px;}
+
+#progress-wrap{width:100%;max-width:900px;margin-top:56px;}
+#progress-track{height:18px;background:rgba(255,255,255,.1);border-radius:99px;overflow:hidden;}
+#progress-fill{height:100%;background:var(--blue);border-radius:99px;width:0%;transition:width .6s cubic-bezier(0.4,0,0.2,1);}
+#progress-pct{font-size:22px;font-weight:700;color:rgba(255,255,255,.4);margin-top:14px;letter-spacing:.06em;text-align:right;}
+
+/* Spot-checking the display on a phone shouldn't look broken. */
+@media (max-width:700px){
+  #layout{padding:24px;}
+  #total-goal{font-size:20px;}
+  #progress-wrap{margin-top:32px;}
+}
+
+/* CONFETTI */
+
+/* width/height 100% is load-bearing, not decoration. A <canvas> is a
+   replaced element with an intrinsic size, so position:fixed + inset:0
+   alone does NOT stretch it — the browser uses the backing-store size
+   and pins it top-left. That's what caused confetti to cover only part
+   of the screen after entering fullscreen. */
+#confetti-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:60;pointer-events:none;}
+
+/* CONNECTION */
+#conn{position:fixed;bottom:14px;right:16px;width:8px;height:8px;border-radius:50%;background:#3a3;transition:background .3s;}
+#conn.off{background:#a33;}
+</style>
+</head>
+<body>
+
+<div id="layout">
+  <div id="total-label">Total Bags Packed</div>
+  <div id="total-num">0</div>
+  <div id="total-goal">Every Child. Every Family. Everywhere.</div>
+  <div id="progress-wrap">
+    <div id="progress-track"><div id="progress-fill"></div></div>
+    <div id="progress-pct">0%</div>
+  </div>
+</div>
+
+<canvas id="confetti-canvas"></canvas>
+<div id="conn"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const SUPABASE_URL = 'https://advjuonmfxpjxxgmoycx.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFkdmp1b25tZnhwanh4Z21veWN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NzkyMjQsImV4cCI6MjA5NTU1NTIyNH0.hgAlqocR8DSTHNGg_fdG6nWW6NQ6t_K2RD7D4sdXPGc';
+
+/* ── EVENT CONFIG — keep these in step with the tablet app ── */
+const LINES = 40;   // packing lines; must match the row count in `lines`
+let GOAL = 16000;   // let, so ?goal=N can override it for rehearsals
+
+let counts = new Array(LINES).fill(0);
+let lastTotal = 0;
+let lastBump = 0;
+let celebrationFired = false;
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+async function loadAll() {
+  const { data, error } = await sb.from('lines').select('id, count').order('id');
+  if (error) { console.error(error); return; }
+  data.forEach(row => { counts[row.id - 1] = row.count; });
+  applyState();
+}
+
+const conn = document.getElementById('conn');
+sb.channel('lines-changes')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'lines' },
+    (payload) => {
+      /* '*' rather than 'UPDATE' so a row added mid-event — a 41st line,
+         a row someone forgot to seed — starts counting without needing
+         the display refreshed. DELETE carries no payload.new, hence the
+         guard. */
+      const row = payload.new;
+      if (!row || row.id == null) return;
+      counts[row.id - 1] = row.count || 0;
+      scheduleApply();
+    }
+  )
+  .subscribe((status) => {
+    conn.classList.toggle('off', status !== 'SUBSCRIBED');
+  });
+
+/* 40 lines tapping at once can land dozens of realtime events per second,
+   and the old code ran a full repaint on every one. This collapses a
+   burst into one repaint per frame — same numbers, none of the thrash. */
+let applyQueued = false;
+function scheduleApply() {
+  if (applyQueued) return;
+  applyQueued = true;
+  requestAnimationFrame(() => { applyQueued = false; applyState(); });
+}
+
+function applyState() {
+  const rawTotal = counts.reduce((a, b) => a + b, 0);
+  const total = Math.min(rawTotal, GOAL);
+
+  if (total !== lastTotal) {
+    const el = document.getElementById('total-num');
+    el.textContent = total.toLocaleString();
+    /* Throttled past the 220ms animation. Un-throttled, a heavy rush
+       re-added the class before the old timer cleared it and the number
+       just sat at 1.05 scale for the whole push, so the pop stopped
+       reading as a pop. */
+    const now = performance.now();
+    if (now - lastBump > 240) {
+      lastBump = now;
+      el.classList.add('bump');
+      setTimeout(() => el.classList.remove('bump'), 220);
+    }
+  }
+
+  const pct = Math.min(100, (total / GOAL) * 100);
+  document.getElementById('progress-fill').style.width = pct.toFixed(2) + '%';
+  document.getElementById('progress-pct').textContent = pct.toFixed(1) + '%';
+
+  if (total >= GOAL && !celebrationFired) {
+    celebrationFired = true;
+    startConfetti();
+  } else if (total < GOAL && celebrationFired) {
+    celebrationFired = false;
+    stopConfetti();
+  }
+
+  lastTotal = total;
+}
+
+/* ════════════════════════════════════════════════════════════
+   CONFETTI — hardened for big walls and low-power players
+   ────────────────────────────────────────────────────────────
+   Four things went wrong before, all fixed here:
+   1. Motion was per-FRAME (p.y += p.vy), so a slow frame froze the
+      fall mid-air and resumed from the same spot. Now it's per-SECOND
+      with a clamp, so a hitch becomes a brief slow-down, never a
+      freeze and never a teleport.
+   2. The backing store was window-sized, so a 4K player made us clear
+      and repaint 8.3M pixels a frame. Now it's capped; CSS upscales.
+   3. Size was read once at start, so resizing or going fullscreen left
+      confetti stranded in a corner. Now it re-fits itself every frame.
+   4. Every recycled particle allocated a new object AND a new color
+      array, feeding the GC. Now the pool is fixed and reused in place.
+   ════════════════════════════════════════════════════════════ */
+
+const CONFETTI_COLORS = ['#00b0ff','#004270','#0378ad','#ffffff','#f3f9fd','#7fd4ff'];
+const CONFETTI_MAX = 260;          // pool ceiling — never allocated past this
+const CONFETTI_MIN_ACTIVE = 60;    // floor the auto-throttle won't go below
+const MAX_BACKING_PX = 2600000;    // ~1080p at 1.5x — the per-frame pixel budget
+
+const cf = {
+  canvas: null, ctx: null,
+  pool: [], active: 0,
+  w: 0, h: 0, scale: 1, sizeScale: 1,
+  running: false, raf: null, last: 0, slowFrames: 0
+};
+
+/* Fit the canvas to the viewport. Called on load, on resize/fullscreen,
+   and defensively from inside the frame loop — some browsers (and most
+   TV/stick browsers) never fire a resize event on a fullscreen change,
+   which is exactly why the old version needed a manual refresh. */
+function fitConfetti() {
+  const c = cf.canvas;
+  if (!c) return;
+  const cssW = Math.max(1, window.innerWidth);
+  const cssH = Math.max(1, window.innerHeight);
+
+  // Respect DPR up to 2x, then shrink to stay inside the pixel budget.
+  let scale = Math.min(window.devicePixelRatio || 1, 2);
+  const px = cssW * cssH * scale * scale;
+  if (px > MAX_BACKING_PX) scale *= Math.sqrt(MAX_BACKING_PX / px);
+  scale = Math.max(0.25, scale);
+
+  const bw = Math.round(cssW * scale);
+  const bh = Math.round(cssH * scale);
+  if (c.width !== bw || c.height !== bh) { c.width = bw; c.height = bh; }
+
+  const oldW = cf.w, oldH = cf.h;
+  cf.w = cssW; cf.h = cssH; cf.scale = scale;
+
+  // Bigger screen = bigger, faster flakes, so they read the same from
+  // the back of the room instead of turning into 6px dust.
+  cf.sizeScale = Math.min(2.5, Math.max(0.8, Math.min(cssW, cssH) / 800));
+
+  // Density from area, not a hardcoded 220.
+  const want = Math.round((cssW * cssH) / 14000);
+  cf.active = Math.min(CONFETTI_MAX, Math.max(90, want));
+
+  // Grow the pool once; entries are reused forever after.
+  while (cf.pool.length < CONFETTI_MAX) cf.pool.push({});
+
+  // Keep in-flight particles where they were, proportionally.
+  if (oldW && oldH) {
+    const fx = cssW / oldW, fy = cssH / oldH;
+    for (let i = 0; i < cf.pool.length; i++) {
+      const p = cf.pool[i];
+      if (p.x === undefined) continue;
+      p.x *= fx; p.y *= fy;
+    }
+  }
+
+  // Setting .width resets all context state, so re-establish it after.
+  cf.ctx = c.getContext('2d');
+  cf.ctx.setTransform(scale, 0, 0, scale, 0, 0);
+}
+
+/* Reuse an existing object — no allocation, no garbage, no GC pauses.
+   Velocities are px/sec and rad/sec, matching the old 60fps feel. */
+function resetParticle(p, spread) {
+  const s = cf.sizeScale;
+  p.x = Math.random() * cf.w;
+  p.y = spread ? Math.random() * cf.h : -20 - Math.random() * cf.h * 0.3;
+  p.w = (6 + Math.random() * 8) * s;
+  p.h = (10 + Math.random() * 6) * s;
+  p.color = CONFETTI_COLORS[(Math.random() * CONFETTI_COLORS.length) | 0];
+  p.rot = Math.random() * Math.PI * 2;
+  p.rotV = (Math.random() - 0.5) * 7.2;
+  p.vx = (Math.random() - 0.5) * 150 * s;
+  p.vy = (150 + Math.random() * 210) * s;
+  p.opacity = 0.85 + Math.random() * 0.15;
+}
+
+function startConfetti() {
+  if (cf.running) return;
+  cf.canvas = document.getElementById('confetti-canvas');
+  fitConfetti();
+  for (let i = 0; i < cf.pool.length; i++) resetParticle(cf.pool[i], true);
+  cf.running = true;
+  cf.last = performance.now();
+  cf.slowFrames = 0;
+  cf.raf = requestAnimationFrame(confettiFrame);
+}
+
+function stopConfetti() {
+  cf.running = false;
+  if (cf.raf) cancelAnimationFrame(cf.raf);
+  cf.raf = null;
+  if (cf.ctx) cf.ctx.clearRect(0, 0, cf.w, cf.h);
+}
+
+function confettiFrame(now) {
+  if (!cf.running) return;
+
+  // Catch a fullscreen/resolution change even with no resize event.
+  if (window.innerWidth !== cf.w || window.innerHeight !== cf.h) fitConfetti();
+
+  let dt = (now - cf.last) / 1000;
+  cf.last = now;
+  if (!(dt > 0)) dt = 1 / 60;
+  if (dt > 0.05) dt = 0.05;   // the anti-teleport clamp
+
+  // Watchdog: if the machine genuinely can't keep up, thin the confetti
+  // rather than letting it stutter. Downgrade only, so it never flaps.
+  if (dt * 1000 > 33) {
+    if (++cf.slowFrames > 90 && cf.active > CONFETTI_MIN_ACTIVE) {
+      cf.active = Math.max(CONFETTI_MIN_ACTIVE, Math.round(cf.active * 0.8));
+      cf.slowFrames = 0;
+    }
+  } else if (cf.slowFrames > 0) {
+    cf.slowFrames--;
+  }
+
+  const ctx = cf.ctx, s = cf.scale;
+  ctx.setTransform(s, 0, 0, s, 0, 0);
+  ctx.clearRect(0, 0, cf.w, cf.h);
+
+  for (let i = 0; i < cf.active; i++) {
+    const p = cf.pool[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.rot += p.rotV * dt;
+    // Wrap sideways instead of letting drift carry flakes off the edges
+    // forever — over a long celebration that quietly thinned the middle.
+    if (p.x < -40) p.x += cf.w + 80;
+    else if (p.x > cf.w + 40) p.x -= cf.w + 80;
+    if (p.y > cf.h + 20) resetParticle(p, false);
+
+    // One setTransform instead of save/translate/rotate/restore.
+    const cos = Math.cos(p.rot), sin = Math.sin(p.rot);
+    ctx.setTransform(s * cos, s * sin, -s * sin, s * cos, s * p.x, s * p.y);
+    ctx.globalAlpha = p.opacity;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+  }
+
+  ctx.setTransform(s, 0, 0, s, 0, 0);
+  ctx.globalAlpha = 1;
+  cf.raf = requestAnimationFrame(confettiFrame);
+}
+
+// Size the canvas up front so the first celebration frame is already
+// correct, and re-fit on every event that can change the viewport.
+cf.canvas = document.getElementById('confetti-canvas');
+fitConfetti();
+['resize', 'orientationchange'].forEach(ev => window.addEventListener(ev, fitConfetti));
+document.addEventListener('fullscreenchange', fitConfetti);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', fitConfetti);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') { cf.last = performance.now(); fitConfetti(); loadAll(); }
+});
+
+/* ── Rehearsal hooks (URL-only, nothing on the keyboard) ──
+   ?confetti=1  start the celebration immediately on load
+   ?goal=25     lower the scoreboard goal for a dry run
+   Neither can be triggered by accident — the live URL stays clean.  */
+const _q = new URLSearchParams(location.search);
+if (_q.get('goal')) {
+  const g = parseInt(_q.get('goal'), 10);
+  if (g > 0) GOAL = g;
+}
+if (_q.get('confetti')) startConfetti();
+
+loadAll();
+/* Re-read the whole table every 30s. Realtime is the fast path, but if the
+   socket drops silently the display would otherwise sit on a stale number
+   for the rest of the event with a green dot still showing. */
+setInterval(loadAll, 30000);
+</script>
+</body>
+</html>
