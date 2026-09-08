@@ -39,7 +39,16 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 #select-logo{width:8vh;min-width:44px;margin-bottom:2.4vh;}
 #select-title{font-size:clamp(24px,4.6vh,42px);font-weight:900;color:#fff;letter-spacing:-.02em;text-align:center;line-height:1.1;margin-bottom:.6vh;}
 #select-sub{font-size:clamp(12px,1.8vh,16px);font-weight:700;color:var(--blue);letter-spacing:.1em;text-transform:uppercase;text-align:center;margin-bottom:3.2vh;}
-#line-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:1.4vh;width:100%;max-width:840px;}
+/* 40 lines: 10 across × 4 down. At the old 8 across this became 5 rows and
+   ran off the bottom of a Fire 7 (1024×600) — the last rows were unreachable.
+   min-height:0 + overflow-y is the backstop: on any screen shape we haven't
+   tested, the grid scrolls instead of hiding line buttons. */
+#line-grid{
+  display:grid;grid-template-columns:repeat(10,1fr);gap:1.2vh;
+  width:100%;max-width:1100px;min-height:0;overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+@media (orientation:portrait){#line-grid{grid-template-columns:repeat(6,1fr);}}
 .line-btn{
   aspect-ratio:1;border-radius:14px;border:1.5px solid rgba(0,176,255,.35);
   background:rgba(255,255,255,.05);
@@ -214,7 +223,9 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
           <path d="M30,14 L10,25 L30,36" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </div>
-      <div id="tap-locked-msg">1,000 Bags Completed! Thank you for being a part of it!</div>
+      <!-- Text is written from GOAL on load — see EVENT CONFIG. Leaving the
+           number in the markup is how this said "1,000" at a 16,000 event. -->
+      <div id="tap-locked-msg"></div>
     </div>
   </div>
 </div>
@@ -223,8 +234,13 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 <script>
 const SUPABASE_URL = 'https://advjuonmfxpjxxgmoycx.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFkdmp1b25tZnhwanh4Z21veWN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NzkyMjQsImV4cCI6MjA5NTU1NTIyNH0.hgAlqocR8DSTHNGg_fdG6nWW6NQ6t_K2RD7D4sdXPGc';
-const GOAL = 1000;
-const LINES = 16;
+/* ── EVENT CONFIG — the only two numbers to change between events ──
+   GOAL  the tap button locks once the all-lines total reaches this
+   LINES how many buttons appear on the select screen (must match the
+         number of rows in the Supabase `lines` table, or a tablet can
+         pick a line that doesn't exist and every tap silently fails) */
+const GOAL = 16000;
+const LINES = 40;
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
@@ -232,6 +248,10 @@ let selectedLine = null;
 let lineCount = 0;
 let locked = false;
 let tapping = false;
+
+// Finish-line message follows GOAL, so there's no second place to edit.
+document.getElementById('tap-locked-msg').textContent =
+  `${GOAL.toLocaleString()} Bags Completed! Thank you for being a part of it!`;
 
 // ── Build line grid ──
 const grid = document.getElementById('line-grid');
@@ -248,7 +268,9 @@ async function selectLine(n) {
   document.getElementById('tap-line-num').textContent = `Line ${n}`;
   document.getElementById('screen-select').classList.add('hidden');
   document.getElementById('screen-tap').classList.remove('hidden');
+  subscribeToLine(n);            // re-points the realtime filter on every change
   await refreshLineCount();
+  await refreshTotal();           // pick up an already-reached goal immediately
 }
 
 document.getElementById('change-line').addEventListener('click', () => {
@@ -360,18 +382,34 @@ function setLocked(val) {
 // other tablets' taps. Now they do.
 const connDot = document.getElementById('conn-dot');
 
-sb.channel('tablet-lines')
-  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'lines' },
-    (payload) => {
-      if (payload.new.id === selectedLine) {
+/* Scoped to this tablet's own line with a server-side filter.
+   Before, every tablet subscribed to every row: at 16 lines that was
+   noise, but 40 tablets each hearing all 40 lines is 40x the messages
+   for data the handler threw away anyway (it only ever acted on
+   payload.new.id === selectedLine). Same behaviour, a fraction of the
+   realtime traffic. If the filter ever fails, the 15s poll below and
+   the optimistic local count still keep the number right. */
+let lineChannel = null;
+
+function subscribeToLine(n) {
+  if (lineChannel) {
+    sb.removeChannel(lineChannel);
+    lineChannel = null;
+  }
+  connDot.classList.add('off');
+  lineChannel = sb.channel(`tablet-line-${n}`)
+    .on('postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'lines', filter: `id=eq.${n}` },
+      (payload) => {
+        if (!payload.new || payload.new.id !== selectedLine) return;
         lineCount = payload.new.count;
         countEl.textContent = lineCount.toLocaleString();
       }
-    }
-  )
-  .subscribe((status) => {
-    connDot.classList.toggle('off', status !== 'SUBSCRIBED');
-  });
+    )
+    .subscribe((status) => {
+      connDot.classList.toggle('off', status !== 'SUBSCRIBED');
+    });
+}
 
 // ── Fire tablet: refresh on visibility change ──
 // Fire OS aggressively suspends background tabs/apps. When the user
@@ -387,13 +425,18 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-// Fallback polling every 15s
-setInterval(() => {
-  if (selectedLine) {
-    refreshLineCount();
-    refreshTotal();
-  }
-}, 15000);
+/* Fallback polling every 15s, with a random start offset.
+   40 tablets on a bare setInterval all fire in the same instant, giving
+   Supabase a 40-request spike every 15 seconds. The offset spreads them
+   across the window. */
+setTimeout(() => {
+  setInterval(() => {
+    if (selectedLine) {
+      refreshLineCount();
+      refreshTotal();
+    }
+  }, 15000);
+}, Math.random() * 15000);
 
 // ── PWA: register service worker + keep screen awake ──
 if ('serviceWorker' in navigator) {
