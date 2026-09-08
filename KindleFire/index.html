@@ -247,7 +247,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 let selectedLine = null;
 let lineCount = 0;
 let locked = false;
-let tapping = false;
+// (the old `tapping` mutex is gone — see the tap handler)
 
 // Finish-line message follows GOAL, so there's no second place to edit.
 document.getElementById('tap-locked-msg').textContent =
@@ -297,9 +297,19 @@ function playTick() {
 const tapBtn = document.getElementById('tap-btn');
 const countEl = document.getElementById('tap-count');
 
-tapBtn.addEventListener('pointerdown', async (e) => {
-  if (locked || tapping) return;
-  tapping = true;
+/* Taps must NEVER wait on the network. The old handler held a `tapping`
+   mutex for the whole RPC round-trip, so any press landing mid-request was
+   dropped — silently, because the sound and the count both sat behind the
+   guard while the button's shrink is pure CSS :active and fired anyway. On
+   a slow link that ate three presses out of four.
+   Now every press is counted and sounded locally, the request goes out
+   without blocking, and the server's number is adopted only once nothing
+   else is in flight. `pending` is how many requests are outstanding. */
+let pending = 0;
+let needsReconcile = false;
+
+tapBtn.addEventListener('pointerdown', (e) => {
+  if (locked || !selectedLine) return;
 
   // Ripple
   const rect = tapBtn.getBoundingClientRect();
@@ -310,32 +320,56 @@ tapBtn.addEventListener('pointerdown', async (e) => {
   tapBtn.appendChild(ripple);
   setTimeout(() => ripple.remove(), 520);
 
-  // Flash + haptic + tick
+  // Flash + haptic + tick — immediate, every single press.
   tapBtn.classList.add('flash');
   setTimeout(() => tapBtn.classList.remove('flash'), 180);
   if (navigator.vibrate) navigator.vibrate(60);
   playTick();
 
-  // Optimistic UI
+  // Optimistic count, also immediate.
   lineCount++;
   countEl.textContent = lineCount.toLocaleString();
 
+  pending++;
+  sendIncrement();
+});
+
+async function sendIncrement() {
+  const t0 = performance.now();
   try {
     const { data, error } = await sb.rpc('increment_line', { line_id: selectedLine });
     if (error) throw error;
-    lineCount = data.new_count;
-    countEl.textContent = lineCount.toLocaleString();
-    if (data.total >= GOAL) setLocked(true);
+
+    console.debug(`increment_line ${Math.round(performance.now() - t0)}ms`, data);
+
+    if (data && data.total >= GOAL) setLocked(true);
+
+    /* Adopt the server's count only when this is the last request out.
+       Mid-burst, new_count is already stale — the responses come back in
+       whatever order they finish, so trusting one would make the number
+       jump backwards. The local count is right; this just re-anchors it. */
+    if (pending === 1 && data && typeof data.new_count === 'number') {
+      lineCount = data.new_count;
+      countEl.textContent = lineCount.toLocaleString();
+    }
   } catch (err) {
     console.error(err);
+    // The bag may not have been recorded. Re-read once the burst settles
+    // rather than guessing, so the tablet can't drift from the database.
+    needsReconcile = true;
+  } finally {
+    pending--;
+    if (pending === 0 && needsReconcile) {
+      needsReconcile = false;
+      refreshLineCount();
+    }
   }
-
-  tapping = false;
-});
+}
 
 // ── State ──
 async function refreshLineCount() {
   if (!selectedLine) return;
+  if (pending > 0) return;   // don't clobber a count that's mid-burst
   try {
     const { data, error } = await sb
       .from('lines')
@@ -402,6 +436,9 @@ function subscribeToLine(n) {
       { event: 'UPDATE', schema: 'public', table: 'lines', filter: `id=eq.${n}` },
       (payload) => {
         if (!payload.new || payload.new.id !== selectedLine) return;
+        // Ignore while our own taps are in flight: the event reflects an
+        // earlier state than the local count and would jump backwards.
+        if (pending > 0) return;
         lineCount = payload.new.count;
         countEl.textContent = lineCount.toLocaleString();
       }
