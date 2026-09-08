@@ -5,13 +5,17 @@
 
 // IMPORTANT: bump the cache name any time you deploy new files so tablets
 // pick up changes immediately instead of serving the old cached shell.
-const CACHE = 'rbr-v9';
+const CACHE = 'rbr-v10';   // bumped for the 40-line / 16,000-bag build
 const SHELL = [
   'index.html',
   'manifest.json',
   'RBRbag.png',
   'icon-192.png',
-  'icon-512.png'
+  'icon-512.png',
+  // Referenced by manifest.json but previously not precached, so a tablet
+  // installed on a flaky connection could come up with no launcher icon.
+  'icon-192-maskable.png',
+  'icon-512-maskable.png'
 ];
 
 self.addEventListener('install', (e) => {
