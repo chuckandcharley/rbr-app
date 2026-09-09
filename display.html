@@ -59,6 +59,13 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 /* CONNECTION */
 #conn{position:fixed;bottom:14px;right:16px;width:8px;height:8px;border-radius:50%;background:#3a3;transition:background .3s;}
 #conn.off{background:#a33;}
+
+/* Rehearsal-only readout (?debug=1). Never shown on the live URL. */
+#debug{
+  position:fixed;bottom:12px;left:16px;font-size:13px;font-weight:600;
+  color:rgba(255,255,255,.35);letter-spacing:.04em;display:none;
+  font-variant-numeric:tabular-nums;
+}
 </style>
 </head>
 <body>
@@ -75,49 +82,83 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 
 <canvas id="confetti-canvas"></canvas>
 <div id="conn"></div>
+<div id="debug"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 const SUPABASE_URL = 'https://advjuonmfxpjxxgmoycx.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFkdmp1b25tZnhwanh4Z21veWN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NzkyMjQsImV4cCI6MjA5NTU1NTIyNH0.hgAlqocR8DSTHNGg_fdG6nWW6NQ6t_K2RD7D4sdXPGc';
 
-/* ── EVENT CONFIG — keep these in step with the tablet app ── */
-const LINES = 40;   // packing lines; must match the row count in `lines`
-let GOAL = 16000;   // let, so ?goal=N can override it for rehearsals
+/* ── EVENT CONFIG ──
+   Everything that can change on the day — the goal, which row is the
+   host's hidden pad — lives in the `event_config` row in Supabase, so
+   the wall display never needs re-deploying to change it. */
 
-let counts = new Array(LINES).fill(0);
-let lastTotal = 0;
+let counts = {};          // keyed by line id, so any number of lines works
+let lastTotal = -1;
+let lastPct = '';
 let lastBump = 0;
 let celebrationFired = false;
 
+let cfg = { goal: 16000, force: false, hostLine: 41, floorCap: 15995 };
+let goalOverride = null;  // set by ?goal=N for rehearsals
+let dbg = null;           // set by ?debug=1
+
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
+/* ── Data ────────────────────────────────────────────────── */
+
 async function loadAll() {
-  const { data, error } = await sb.from('lines').select('id, count').order('id');
-  if (error) { console.error(error); return; }
-  data.forEach(row => { counts[row.id - 1] = row.count; });
+  const [lines, board] = await Promise.all([
+    sb.from('lines').select('id, count').order('id'),
+    sb.rpc('scoreboard')
+  ]);
+
+  if (lines.error) console.error(lines.error);
+  else if (lines.data) {
+    /* Rebuild rather than merge, so a row deleted in Supabase actually
+       disappears from the board instead of lingering in the total. */
+    const fresh = {};
+    lines.data.forEach(r => { fresh[r.id] = r.count || 0; });
+    counts = fresh;
+  }
+
+  if (board.error) console.error(board.error);
+  else if (board.data) applyConfig(board.data);
+
   applyState();
 }
 
+function applyConfig(s) {
+  if (!s) return;
+  cfg.goal     = goalOverride || s.goal || 16000;
+  cfg.force    = !!s.force_celebrate;
+  cfg.hostLine = s.host_line ?? 41;
+  cfg.floorCap = s.floor_cap ?? cfg.goal;
+}
+
 const conn = document.getElementById('conn');
-sb.channel('lines-changes')
+
+sb.channel('rbr-changes')
   .on('postgres_changes', { event: '*', schema: 'public', table: 'lines' },
     (payload) => {
-      /* '*' rather than 'UPDATE' so a row added mid-event — a 41st line,
-         a row someone forgot to seed — starts counting without needing
-         the display refreshed. DELETE carries no payload.new, hence the
-         guard. */
+      /* '*' rather than 'UPDATE' so a row added mid-event — the host line,
+         a row someone forgot to seed — starts counting without needing the
+         display refreshed. DELETE carries no payload.new, hence the guard. */
       const row = payload.new;
       if (!row || row.id == null) return;
-      counts[row.id - 1] = row.count || 0;
+      counts[row.id] = row.count || 0;
       scheduleApply();
     }
+  )
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'event_config' },
+    (payload) => { if (payload.new) loadAll(); }
   )
   .subscribe((status) => {
     conn.classList.toggle('off', status !== 'SUBSCRIBED');
   });
 
-/* 40 lines tapping at once can land dozens of realtime events per second,
+/* 41 lines tapping at once can land dozens of realtime events per second,
    and the old code ran a full repaint on every one. This collapses a
    burst into one repaint per frame — same numbers, none of the thrash. */
 let applyQueued = false;
@@ -128,8 +169,10 @@ function scheduleApply() {
 }
 
 function applyState() {
-  const rawTotal = counts.reduce((a, b) => a + b, 0);
-  const total = Math.min(rawTotal, GOAL);
+  const goal = cfg.goal || 16000;
+  let sum = 0;
+  for (const k in counts) sum += counts[k] || 0;
+  const total = Math.min(sum, goal);
 
   if (total !== lastTotal) {
     const el = document.getElementById('total-num');
@@ -146,16 +189,30 @@ function applyState() {
     }
   }
 
-  const pct = Math.min(100, (total / GOAL) * 100);
-  document.getElementById('progress-fill').style.width = pct.toFixed(2) + '%';
-  document.getElementById('progress-pct').textContent = pct.toFixed(1) + '%';
+  const pct = Math.min(100, (total / goal) * 100);
+  const pctStr = pct.toFixed(1) + '%';
+  if (pctStr !== lastPct) {
+    lastPct = pctStr;
+    document.getElementById('progress-fill').style.width = pct.toFixed(2) + '%';
+    document.getElementById('progress-pct').textContent = pctStr;
+  }
 
-  if (total >= GOAL && !celebrationFired) {
+  const shouldCelebrate = total >= goal || cfg.force;
+  if (shouldCelebrate && !celebrationFired) {
     celebrationFired = true;
     startConfetti();
-  } else if (total < GOAL && celebrationFired) {
+  } else if (!shouldCelebrate && celebrationFired) {
     celebrationFired = false;
     stopConfetti();
+  }
+
+  if (dbg) {
+    const host = counts[cfg.hostLine] || 0;
+    dbg.textContent =
+      'floor ' + (sum - host).toLocaleString() +
+      ' · host ' + host.toLocaleString() +
+      ' · floor stops at ' + cfg.floorCap.toLocaleString() +
+      ' · goal ' + goal.toLocaleString();
   }
 
   lastTotal = total;
@@ -336,19 +393,23 @@ document.addEventListener('visibilitychange', () => {
 /* ── Rehearsal hooks (URL-only, nothing on the keyboard) ──
    ?confetti=1  start the celebration immediately on load
    ?goal=25     lower the scoreboard goal for a dry run
+   ?debug=1     show floor / host / caps in the corner
    Neither can be triggered by accident — the live URL stays clean.  */
 const _q = new URLSearchParams(location.search);
 if (_q.get('goal')) {
   const g = parseInt(_q.get('goal'), 10);
-  if (g > 0) GOAL = g;
+  if (g > 0) { goalOverride = g; cfg.goal = g; }
 }
+if (_q.get('debug')) { dbg = document.getElementById('debug'); dbg.style.display = 'block'; }
 if (_q.get('confetti')) startConfetti();
 
 loadAll();
-/* Re-read the whole table every 30s. Realtime is the fast path, but if the
-   socket drops silently the display would otherwise sit on a stale number
-   for the rest of the event with a green dot still showing. */
-setInterval(loadAll, 30000);
+/* Re-read the table and the config every 15s. Realtime is the fast path,
+   but if the socket drops silently the display would otherwise sit on a
+   stale number for the rest of the event with a green dot still showing.
+   It also re-reads the goal, so changing it in the admin console reaches
+   the wall within fifteen seconds without touching the display. */
+setInterval(loadAll, 15000);
 </script>
 </body>
 </html>
