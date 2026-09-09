@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -165,6 +165,69 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 #conn-dot.off{background:#a33;}
 
 
+/* ════════════════════════════════════════════════════════════
+   HOST PAD — line 41, the pre-packed bags
+   Hidden. Three taps on the logo on the select screen, then a PIN.
+   Laid out two-column for a Fire 7 in landscape (1024x600); stacks
+   on anything portrait.
+   ════════════════════════════════════════════════════════════ */
+#hp-veil,#hp-pin{position:fixed;inset:0;z-index:9000;background:#00243f;display:none;color:#fff;}
+#hp-veil.on{display:flex;}
+#hp-pin.on{display:flex;}
+#hp-veil{flex-direction:row;padding:2.4vh 3vw;gap:3vw;}
+#hp-left{flex:1 1 50%;display:flex;flex-direction:column;justify-content:center;min-width:0;}
+#hp-right{flex:1 1 50%;display:flex;flex-direction:column;justify-content:center;gap:1.4vh;}
+
+#hp-title{font-size:clamp(9px,1.4vh,12px);font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;color:rgba(255,255,255,.45);}
+#hp-count{font-size:clamp(44px,11vh,96px);font-weight:900;line-height:.95;
+  letter-spacing:-.03em;font-variant-numeric:tabular-nums;margin-top:.4vh;}
+#hp-of{font-size:clamp(12px,1.9vh,17px);font-weight:700;color:rgba(255,255,255,.5);margin-top:.8vh;}
+#hp-pace{font-size:clamp(12px,1.9vh,17px);font-weight:700;line-height:1.45;
+  color:rgba(255,255,255,.75);margin-top:1.6vh;}
+#hp-pace b{color:#7fd4ff;}
+#hp-pace.behind b{color:#ffc46b;}
+#hp-pace.ahead b{color:#8fe0b0;}
+#hp-banner{margin-top:1.6vh;padding:1.4vh 2vh;border-radius:12px;background:#c0392b;
+  font-size:clamp(13px,2.1vh,19px);font-weight:900;line-height:1.35;display:none;}
+#hp-banner.on{display:block;}
+#hp-msg{font-size:clamp(11px,1.7vh,15px);font-weight:700;color:rgba(255,255,255,.55);
+  margin-top:1.4vh;min-height:2.4vh;}
+#hp-msg.err{color:#ff9b8f;}
+
+#hp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.2vh;}
+#hp-grid button,#hp-close{
+  border:none;border-radius:14px;background:rgba(255,255,255,.13);color:#fff;
+  font-family:var(--ff);font-weight:900;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;font-variant-numeric:tabular-nums;
+}
+#hp-grid button{padding:2.4vh .4vw;font-size:clamp(16px,2.8vh,26px);}
+#hp-grid button:active{background:rgba(255,255,255,.3);transform:scale(.95);}
+#hp-grid button.minus{background:rgba(255,255,255,.06);color:rgba(255,255,255,.55);
+  font-size:clamp(12px,2vh,18px);}
+#hp-one{grid-column:1/-1;background:var(--blue)!important;color:var(--navy)!important;
+  padding:5vh .4vw!important;font-size:clamp(26px,5vh,44px)!important;}
+#hp-one:active{background:#4fc9ff!important;}
+#hp-close{padding:1.6vh;font-size:clamp(11px,1.7vh,14px);letter-spacing:.08em;
+  text-transform:uppercase;background:rgba(255,255,255,.07);color:rgba(255,255,255,.55);}
+
+/* PIN */
+#hp-pin{z-index:9100;flex-direction:column;align-items:center;justify-content:center;gap:1.2vh;}
+#hp-pin-label{font-size:clamp(11px,1.7vh,14px);font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;color:rgba(255,255,255,.45);}
+#hp-dots{font-size:clamp(24px,4.4vh,38px);letter-spacing:.4em;height:5vh;font-weight:900;}
+#hp-keys{display:grid;grid-template-columns:repeat(3,clamp(58px,11vh,84px));gap:1.1vh;}
+#hp-keys button{border:none;border-radius:12px;padding:1.9vh 0;background:rgba(255,255,255,.13);
+  color:#fff;font:900 clamp(17px,3vh,24px) var(--ff);cursor:pointer;
+  -webkit-tap-highlight-color:transparent;}
+#hp-keys button:active{background:rgba(255,255,255,.32);}
+#hp-pin-msg{font-size:clamp(11px,1.7vh,14px);font-weight:700;color:#ff9b8f;min-height:2.6vh;}
+
+@media (orientation:portrait){
+  #hp-veil{flex-direction:column;gap:2vh;}
+  #hp-one{padding:3.4vh .4vw!important;}
+}
+
 </style>
 </head>
 <body>
@@ -230,6 +293,42 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
   </div>
 </div>
 
+<!-- HOST PAD — line 41 (three taps on the select-screen logo, then the PIN) -->
+<div id="hp-veil">
+  <div id="hp-left">
+    <div id="hp-title">Pre-packed bags — line 41</div>
+    <div id="hp-count">0</div>
+    <div id="hp-of"></div>
+    <div id="hp-pace"></div>
+    <div id="hp-banner"></div>
+    <div id="hp-msg"></div>
+  </div>
+  <div id="hp-right">
+    <div id="hp-grid">
+      <button id="hp-one">+1</button>
+      <button data-add="10">+10</button>
+      <button data-add="25">+25</button>
+      <button data-add="100">+100</button>
+      <button class="minus" data-add="-1">&minus;1</button>
+      <button class="minus" data-add="-10">&minus;10</button>
+      <button class="minus" data-add="-100">&minus;100</button>
+    </div>
+    <button id="hp-close">Close</button>
+  </div>
+</div>
+
+<div id="hp-pin">
+  <div id="hp-pin-label">Host PIN</div>
+  <div id="hp-dots">····</div>
+  <div id="hp-keys">
+    <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+    <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+    <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+    <button data-k="x">&#10005;</button><button data-k="0">0</button><button data-k="c">&#9003;</button>
+  </div>
+  <div id="hp-pin-msg"></div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 const SUPABASE_URL = 'https://advjuonmfxpjxxgmoycx.supabase.co';
@@ -241,6 +340,14 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
          pick a line that doesn't exist and every tap silently fails) */
 const GOAL = 16000;
 const LINES = 40;
+
+/* The real goal and the floor's stopping point now live in Supabase
+   (`event_config`), so they can be changed on the day without touching
+   this file. GOAL above is only the fallback if that read ever fails.
+   floorCap is the goal minus the bags reserved for the host pad — the
+   floor tablets stop there so the last few can only come from line 41. */
+let goal = GOAL;
+let floorCap = GOAL;
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
@@ -342,7 +449,12 @@ async function sendIncrement() {
 
     console.debug(`increment_line ${Math.round(performance.now() - t0)}ms`, data);
 
-    if (data && data.total >= GOAL) setLocked(true);
+    /* increment_line() works out `locked` itself using the reserve, so
+       take its word for it rather than re-deriving the ceiling here.
+       The total check is a fallback for an older function signature. */
+    if (data && (data.locked || (typeof data.total === 'number' && data.total >= floorCap))) {
+      setLocked(true);
+    }
 
     /* Adopt the server's count only when this is the last request out.
        Mid-burst, new_count is already stale — the responses come back in
@@ -387,16 +499,29 @@ async function refreshLineCount() {
 // Check total to handle lock/unlock after resets
 async function refreshTotal() {
   try {
-    const { data, error } = await sb.from('lines').select('count');
+    const { data, error } = await sb.rpc('scoreboard');
     if (error) throw error;
-    const total = data.reduce((sum, row) => sum + row.count, 0);
-    if (total >= GOAL) {
-      setLocked(true);
-    } else if (locked && total < GOAL) {
-      setLocked(false);
-    }
+    if (!data) return;
+
+    goal = data.goal || GOAL;
+    floorCap = (data.floor_cap != null) ? data.floor_cap : goal;
+    document.getElementById('tap-locked-msg').textContent =
+      `${goal.toLocaleString()} Bags Completed! Thank you for being a part of it!`;
+
+    const total = data.total || 0;
+    if (total >= floorCap) setLocked(true);
+    else if (locked) setLocked(false);
   } catch (err) {
+    /* scoreboard() missing or unreachable — fall back to the old sum so a
+       tablet running ahead of the migration still counts and still stops. */
     console.error(err);
+    try {
+      const { data, error } = await sb.from('lines').select('count');
+      if (error) throw error;
+      const total = data.reduce((sum, row) => sum + row.count, 0);
+      if (total >= GOAL) setLocked(true);
+      else if (locked) setLocked(false);
+    } catch (e2) { console.error(e2); }
   }
 }
 
@@ -505,6 +630,151 @@ function lockLandscape() {
 lockLandscape();
 // Re-lock after fullscreen changes (some browsers release the lock)
 document.addEventListener('fullscreenchange', lockLandscape);
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════
+   HOST PAD
+   Line 41 is an ordinary row in `lines`. Nothing here runs on its
+   own and nothing is timed — every bag it adds is a button press.
+   The PIN is checked inside Supabase, not in this file, so reading
+   the source of this page doesn't give anyone the PIN.
+   ════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+
+  const UNLOCK_TAPS = 3;      // taps on the select-screen logo
+  const TAP_WINDOW  = 1200;   // …within this many ms
+
+  const $ = id => document.getElementById(id);
+  const fmt = n => (n || 0).toLocaleString();
+
+  let hostPin = null, entry = '', st = null, poll = null, busy = false;
+
+  /* ── Unlock ─────────────────────────────────────────────── */
+  let hits = [];
+  const logo = $('select-logo');
+  if (logo) {
+    logo.style.cursor = 'pointer';
+    logo.addEventListener('click', () => {
+      const now = Date.now();
+      hits = hits.filter(t => now - t < TAP_WINDOW);
+      hits.push(now);
+      if (hits.length >= UNLOCK_TAPS) { hits = []; openPin(); }
+    });
+  }
+
+  function drawPin() {
+    $('hp-dots').textContent = '\u2022'.repeat(entry.length) + '\u00b7'.repeat(Math.max(0, 4 - entry.length));
+  }
+  function openPin()  { entry = ''; drawPin(); $('hp-pin-msg').textContent = ''; $('hp-pin').classList.add('on'); }
+  function closePin() { $('hp-pin').classList.remove('on'); entry = ''; }
+
+  $('hp-keys').addEventListener('click', async (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    const k = b.dataset.k;
+    if (k === 'x') return closePin();
+    if (k === 'c') { entry = entry.slice(0, -1); return drawPin(); }
+    if (entry.length >= 4) return;
+    entry += k; drawPin();
+    if (entry.length === 4) {
+      $('hp-pin-msg').textContent = 'Checking\u2026';
+      const r = await send(entry, null);      // null amount = just check the PIN
+      if (r && r.ok) { hostPin = entry; closePin(); openPad(r.state); }
+      else { $('hp-pin-msg').textContent = r ? 'Wrong PIN.' : 'No connection.'; entry = ''; drawPin(); }
+    }
+  });
+
+  /* ── The pad ────────────────────────────────────────────── */
+  function openPad(s) {
+    $('hp-veil').classList.add('on');
+    if (s) { st = s; draw(); }
+    refresh();
+    poll = setInterval(refresh, 2500);
+  }
+  function closePad() {
+    $('hp-veil').classList.remove('on');
+    clearInterval(poll); poll = null;
+  }
+  $('hp-close').addEventListener('click', closePad);
+
+  async function send(pin, amount) {
+    const { data, error } = await sb.rpc('host_add', { p_pin: pin, p_amount: amount });
+    if (error) { console.error(error); return null; }
+    return data;
+  }
+
+  async function refresh() {
+    const { data, error } = await sb.rpc('scoreboard');
+    if (!error && data) { st = data; draw(); }
+  }
+
+  /* One press = one request. `busy` blocks only overlapping presses, which
+     is right here: unlike the floor button these come a few a minute, and
+     a lost +100 matters far more than a lost +1. */
+  async function add(n) {
+    if (busy || !hostPin) return;
+    busy = true;
+    const msg = $('hp-msg');
+    msg.className = '';
+    const r = await send(hostPin, n);
+    busy = false;
+
+    if (!r) { msg.className = 'err'; msg.textContent = 'No connection \u2014 nothing was added. Press again.'; return; }
+    if (r.ok !== true) { msg.className = 'err'; msg.textContent = 'Rejected \u2014 ' + (r.error || 'unknown'); return; }
+
+    st = r.state; draw();
+    const got = r.added;
+    msg.textContent = got === 0
+      ? 'Board is already on the goal \u2014 nothing added.'
+      : (got > 0 ? 'Added ' + got : 'Took back ' + Math.abs(got)) +
+        (Math.abs(got) !== Math.abs(n) ? ' (trimmed to land on the goal)' : '');
+    if (navigator.vibrate) navigator.vibrate(40);
+  }
+
+  $('hp-one').addEventListener('click', () => add(1));
+  document.querySelectorAll('#hp-grid [data-add]').forEach(b =>
+    b.addEventListener('click', () => add(parseInt(b.dataset.add, 10))));
+
+  function draw() {
+    if (!st) return;
+    const host   = st.host_count  || 0;
+    const floor_ = st.floor_total || 0;
+    const g      = st.goal        || 16000;
+    const target = st.host_target || 0;
+    const cap    = (st.floor_cap != null) ? st.floor_cap : g;
+    const total  = floor_ + host;
+    const left   = Math.max(0, g - total);
+
+    $('hp-count').textContent = fmt(host);
+    $('hp-of').textContent = 'of ' + fmt(target) + ' pre-packed  \u00b7  board ' + fmt(total) + ' / ' + fmt(g);
+
+    // Where you'd be if you were keeping step with the floor.
+    const pace = (g - target) > 0 ? Math.round(floor_ * target / (g - target)) : 0;
+    const gap  = host - pace;
+    const p = $('hp-pace');
+    p.className = Math.abs(gap) < 40 ? '' : (gap < 0 ? 'behind' : 'ahead');
+    p.innerHTML = target
+      ? 'Floor has packed <b>' + fmt(floor_) + '</b>. In step you\u2019d be near <b>' + fmt(pace) + '</b> \u2014 ' +
+        (Math.abs(gap) < 40 ? 'you\u2019re in step.'
+         : gap < 0 ? 'you\u2019re <b>' + fmt(-gap) + '</b> behind.'
+                   : 'you\u2019re <b>' + fmt(gap) + '</b> ahead.')
+      : '';
+
+    const ban = $('hp-banner');
+    if (left === 0) {
+      ban.classList.add('on');
+      ban.style.background = '#15794a';
+      ban.textContent = fmt(g) + ' \u2014 that\u2019s the whole thing.';
+    } else if (floor_ >= cap) {
+      ban.classList.add('on');
+      ban.style.background = '#c0392b';
+      ban.innerHTML = 'The floor tablets have stopped.<br>The last <b>' + fmt(left) + '</b> are yours.';
+    } else {
+      ban.classList.remove('on');
+    }
+  }
+})();
 </script>
 </body>
 </html>
