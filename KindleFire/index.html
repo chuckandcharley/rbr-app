@@ -476,7 +476,7 @@ let pending = 0;
 let needsReconcile = false;
 
 tapBtn.addEventListener('pointerdown', (e) => {
-  if (locked || !selectedLine) return;
+  if (locked || finalBusy || !selectedLine) return;
 
   // Ripple
   const rect = tapBtn.getBoundingClientRect();
@@ -498,7 +498,8 @@ tapBtn.addEventListener('pointerdown', (e) => {
      bag in front of a camera, so the button dies on press and only comes
      back once the server has confirmed the new count. */
   if (finalMode) {
-    setLocked(true);
+    finalBusy = true;
+    setBusy(true);
     finalPress();
     return;
   }
@@ -512,7 +513,6 @@ tapBtn.addEventListener('pointerdown', (e) => {
 });
 
 async function finalPress() {
-  finalBusy = true;
   try {
     const { data, error } = await sb.rpc('increment_line', { line_id: selectedLine });
     if (error) throw error;
@@ -524,6 +524,7 @@ async function finalPress() {
     console.error(err);          // stays dead; refreshTotal below re-arms it
   }
   finalBusy = false;
+  setBusy(false);
   await refreshTotal();
   await refreshLineCount();
 }
@@ -629,6 +630,15 @@ async function refreshTotal() {
       else if (locked) setLocked(false);
     } catch (e2) { console.error(e2); }
   }
+}
+
+/* Mid-press, in final mode only. setLocked() would do the job but it also
+   hides the arrow and reveals the locked message, and both of those occupy
+   layout — so every press shoved the count down and flashed "not yet" for
+   half a second. This dims the button and nothing else. */
+function setBusy(val) {
+  tapBtn.style.opacity = val ? '0.75' : (locked ? '0.4' : '1');
+  tapBtn.style.pointerEvents = (val || locked) ? 'none' : 'all';
 }
 
 function setLocked(val) {
