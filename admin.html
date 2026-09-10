@@ -320,8 +320,8 @@ function render(){
   $('board-split').innerHTML =
     '<b>' + fmt(floor_) + '</b> from the floor · <b>' + fmt(host) + '</b> from your line · ' +
     '<b>' + fmt(left) + '</b> to go' +
-    (floor_ >= cap && left > 0
-      ? '<br>The floor tablets have stopped. The last <b>' + fmt(left) + '</b> are yours.'
+    (total >= cap && left > 0
+      ? '<br>Floor tablets have stopped. The last <b>' + fmt(left) + '</b> are on the Final five pad.'
       : '') +
     (st.force_celebrate ? '<br>Confetti override is on.' : '');
 
@@ -346,7 +346,13 @@ function render(){
   $('host-of').textContent  = target ? 'of ' + fmt(target) + ' pre-packed' : '';
   $('host-fill').style.width = (target ? Math.min(100, host / target * 100) : 0).toFixed(1) + '%';
 
-  const pace = (goal - target) > 0 ? Math.round(floor_ * target / (goal - target)) : 0;
+  /* Biased to finish the pre-packed bags at ~85% of the floor's work.
+     A dead heat is the risky line to stand on: if the floor runs out of
+     real bags before the board reaches the cap, the count stalls and the
+     final five can never fire. Clamped to the pre-packed total. */
+  const pace = (goal - target) > 0
+    ? Math.min(target, Math.round(floor_ * target / (0.85 * (goal - target))))
+    : 0;
   const gap  = host - pace;
   const p = $('host-pace');
   p.className = Math.abs(gap) < 40 ? '' : (gap < 0 ? 'behind' : 'ahead');
