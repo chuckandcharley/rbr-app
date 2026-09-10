@@ -238,41 +238,9 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
   font-size:clamp(11px,1.7vh,14px);font-weight:700;letter-spacing:.08em;text-transform:uppercase;
   cursor:pointer;padding:1.4vh;-webkit-tap-highlight-color:transparent;}
 
-/* ── FINAL FIVE — line 42. One button, one group at a time. ── */
-#hp-final{position:fixed;inset:0;z-index:9060;background:#00243f;display:none;
-  flex-direction:row;align-items:stretch;color:#fff;padding:2.4vh 3vw;gap:3vw;}
-#hp-final.on{display:flex;}
-#hf-left{flex:1 1 50%;display:flex;flex-direction:column;justify-content:center;
-  min-width:0;gap:1vh;}
-#hf-right{flex:1 1 50%;display:flex;align-items:center;justify-content:center;}
-#hf-step{font-size:clamp(9px,1.4vh,12px);font-weight:700;letter-spacing:.14em;
-  text-transform:uppercase;color:rgba(255,255,255,.45);}
-#hf-num{font-size:clamp(34px,9vh,80px);font-weight:900;line-height:1;
-  letter-spacing:-.03em;font-variant-numeric:tabular-nums;}
-#hf-note{font-size:clamp(12px,1.9vh,17px);font-weight:700;line-height:1.45;
-  color:rgba(255,255,255,.6);min-height:4vh;}
-#hf-note.err{color:#ff9b8f;}
-#hf-back{align-self:flex-start;margin-top:1vh;background:none;
-  border:1.5px solid rgba(255,255,255,.2);border-radius:8px;padding:1.2vh 3vw;
-  font-family:var(--ff);font-size:clamp(9px,1.3vh,11px);font-weight:700;letter-spacing:.1em;
-  text-transform:uppercase;color:rgba(255,255,255,.45);cursor:pointer;
-  -webkit-tap-highlight-color:transparent;}
-#hf-btn{width:min(74vh,44vw);height:min(74vh,44vw);
-  max-width:calc(50vw - 40px);max-height:calc(100vh - 60px);
-  border-radius:50%;border:none;background:var(--blue);color:var(--navy);
-  font-family:var(--ff);font-weight:900;font-size:clamp(20px,4.4vh,40px);
-  cursor:pointer;-webkit-tap-highlight-color:transparent;
-  transition:transform .1s,background .12s,color .12s;
-  box-shadow:0 0 0 10px rgba(0,176,255,.18),0 0 0 22px rgba(0,176,255,.08);}
-#hf-btn:active:not(:disabled){transform:scale(.94);}
-#hf-btn:disabled{background:rgba(255,255,255,.1);color:rgba(255,255,255,.3);
-  box-shadow:none;cursor:default;}
-
 @media (orientation:portrait){
   #hp-veil{flex-direction:column;gap:2vh;}
   #hp-one{padding:3.4vh .4vw!important;}
-  #hp-final{flex-direction:column;gap:2vh;}
-  #hf-btn{width:min(40vh,74vw);height:min(40vh,74vw);max-width:none;max-height:none;}
 }
 
 </style>
@@ -372,19 +340,6 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
   <button id="hp-door-close">Close</button>
 </div>
 
-<!-- FINAL FIVE — line 42 -->
-<div id="hp-final">
-  <div id="hf-left">
-    <div id="hf-step">Final five</div>
-    <div id="hf-num">&mdash;</div>
-    <div id="hf-note"></div>
-    <button id="hf-back">Back</button>
-  </div>
-  <div id="hf-right">
-    <button id="hf-btn" disabled>Not yet</button>
-  </div>
-</div>
-
 <div id="hp-pin">
   <div id="hp-pin-label">Host PIN</div>
   <div id="hp-dots">····</div>
@@ -424,6 +379,41 @@ let lineCount = 0;
 let locked = false;
 // (the old `tapping` mutex is gone — see the tap handler)
 
+/* ── FINAL MODE ──
+   The last few bags are packed on the floor like every other bag, so
+   they get the floor's screen — the same DOM, not a copy of it, which
+   is the only way it can't drift out of step. All that changes is the
+   row it writes to and the rule for when the button is alive:
+   awake only between the floor cap and the goal. */
+let finalMode = false;
+let finalBusy = false;
+
+function enterFinalMode(lineId) {
+  finalMode = true;
+  selectedLine = lineId;
+  lineCount = 0;
+  countEl.textContent = '0';
+  document.getElementById('tap-line-num').textContent = `Line ${lineId}`;
+  document.getElementById('change-line').textContent = 'Back';
+  document.getElementById('screen-select').classList.add('hidden');
+  document.getElementById('screen-tap').classList.remove('hidden');
+  setLocked(true);                 // stays dead until refreshTotal says otherwise
+  subscribeToLine(lineId);
+  refreshLineCount();
+  refreshTotal();
+}
+
+function exitFinalMode() {
+  finalMode = false;
+  finalBusy = false;
+  selectedLine = null;
+  document.getElementById('change-line').textContent = 'Change line';
+  document.getElementById('screen-tap').classList.add('hidden');
+  document.getElementById('screen-select').classList.remove('hidden');
+  setLocked(false);
+  if (window.__rbrDoor) window.__rbrDoor();
+}
+
 /* Placeholder only — refreshTotal() overwrites this on the first read,
    picking the right wording for why the button is dead. */
 document.getElementById('tap-locked-msg').textContent =
@@ -450,6 +440,7 @@ async function selectLine(n) {
 }
 
 document.getElementById('change-line').addEventListener('click', () => {
+  if (finalMode) { exitFinalMode(); return; }
   document.getElementById('screen-tap').classList.add('hidden');
   document.getElementById('screen-select').classList.remove('hidden');
 });
@@ -502,6 +493,16 @@ tapBtn.addEventListener('pointerdown', (e) => {
   if (navigator.vibrate) navigator.vibrate(60);
   playTick();
 
+  /* Out on the floor a dropped tap is the thing to avoid, so presses are
+     optimistic and never wait on the network. Here a double-tap burns a
+     bag in front of a camera, so the button dies on press and only comes
+     back once the server has confirmed the new count. */
+  if (finalMode) {
+    setLocked(true);
+    finalPress();
+    return;
+  }
+
   // Optimistic count, also immediate.
   lineCount++;
   countEl.textContent = lineCount.toLocaleString();
@@ -509,6 +510,23 @@ tapBtn.addEventListener('pointerdown', (e) => {
   pending++;
   sendIncrement();
 });
+
+async function finalPress() {
+  finalBusy = true;
+  try {
+    const { data, error } = await sb.rpc('increment_line', { line_id: selectedLine });
+    if (error) throw error;
+    if (data && !data.error && typeof data.new_count === 'number') {
+      lineCount = data.new_count;
+      countEl.textContent = lineCount.toLocaleString();
+    }
+  } catch (err) {
+    console.error(err);          // stays dead; refreshTotal below re-arms it
+  }
+  finalBusy = false;
+  await refreshTotal();
+  await refreshLineCount();
+}
 
 async function sendIncrement() {
   const t0 = performance.now();
@@ -576,12 +594,23 @@ async function refreshTotal() {
     floorCap = (data.floor_cap != null) ? data.floor_cap : goal;
 
     const total = data.total || 0;
+    const done  = total >= goal;
+    const msg   = document.getElementById('tap-locked-msg');
 
-    /* Two different reasons this button goes dead, and they must not
+    if (finalMode) {
+      // Awake only in the window between the floor cap and the goal.
+      msg.textContent = done
+        ? `${goal.toLocaleString()} Bags Completed! Thank you for being a part of it!`
+        : `Not yet \u2014 the floor is still packing.`;
+      if (!finalBusy) setLocked(!(total >= floorCap && !done));
+      return;
+    }
+
+    /* Two different reasons a floor button goes dead, and they must not
        read the same. At the cap the floor is done but the event isn't —
-       the final five are still being packed on stage, and 39 tablets
+       the last bags are still being packed on stage, and 39 tablets
        announcing "16,000 completed" through that would be wrong. */
-    document.getElementById('tap-locked-msg').textContent = (total >= goal)
+    msg.textContent = done
       ? `${goal.toLocaleString()} Bags Completed! Thank you for being a part of it!`
       : `Your line is done \u2014 look up for the last five.`;
 
@@ -591,6 +620,7 @@ async function refreshTotal() {
     /* scoreboard() missing or unreachable — fall back to the old sum so a
        tablet running ahead of the migration still counts and still stops. */
     console.error(err);
+    if (finalMode) return;   // never guess the arm/disarm rule from a stale sum
     try {
       const { data, error } = await sb.from('lines').select('count');
       if (error) throw error;
@@ -770,7 +800,13 @@ document.addEventListener('fullscreenchange', lockLandscape);
 
   $('hp-door-close').addEventListener('click', closeDoor);
   $('hp-door-prepacked').addEventListener('click', () => { closeDoor(); openPad(st); });
-  $('hp-door-final').addEventListener('click', () => { closeDoor(); openFinal(); });
+  $('hp-door-final').addEventListener('click', () => {
+    closeDoor();
+    enterFinalMode((st && st.final_line) || 42);
+  });
+
+  // Let the tap screen reopen this door on Back, without the PIN again.
+  window.__rbrDoor = openDoor;
 
   /* ── The pad ────────────────────────────────────────────── */
   function openPad(s) {
@@ -873,99 +909,6 @@ document.addEventListener('fullscreenchange', lockLandscape);
     }
   }
 
-  /* ════════════════════════════════════════════════════════
-     FINAL FIVE — line 42
-     How many bags belong to this pad is the reserve, straight
-     from the server: goal minus the floor cap. Change the
-     reserve in admin and this follows. Nothing to edit here.
-     ════════════════════════════════════════════════════════ */
-
-  let fst = null, fpoll = null, fbusy = false;
-
-  function openFinal() {
-    $('hp-final').classList.add('on');
-    fdraw();
-    fRefresh();
-    fpoll = setInterval(fRefresh, 2000);
-  }
-  function closeFinal() {
-    $('hp-final').classList.remove('on');
-    clearInterval(fpoll); fpoll = null;
-    openDoor();
-  }
-  $('hf-back').addEventListener('click', closeFinal);
-
-  async function fRefresh() {
-    if (fbusy) return;                       // don't clobber a press in flight
-    const { data, error } = await sb.rpc('scoreboard');
-    if (!error && data) { fst = data; fdraw(); }
-  }
-
-  function fdraw() {
-    const btn = $('hf-btn'), num = $('hf-num'), note = $('hf-note'), step = $('hf-step');
-    if (!fst) { note.textContent = 'Reading the board\u2026'; return; }
-
-    const total = fst.total || 0;
-    const g     = fst.goal  || 16000;
-    const cap   = (fst.floor_cap != null) ? fst.floor_cap : g;
-    const bags  = Math.max(0, g - cap);      // how many belong to this pad
-    const done  = Math.max(0, total - cap);  // how many of them are in
-
-    note.className = '';
-    num.textContent = fmt(total);            // always the live board
-
-    // Done.
-    if (total >= g) {
-      step.textContent = 'Done';
-      note.textContent = 'That\u2019s the whole thing.';
-      btn.disabled = true;
-      btn.textContent = fmt(g);
-      return;
-    }
-
-    // Not yet — the floor hasn't reached the cap. Button stays dead.
-    if (total < cap) {
-      step.textContent = 'Waiting';
-      note.textContent = 'The floor is still packing. Needs ' + fmt(cap - total) +
-                         ' more. This wakes up on its own \u2014 nothing to do.';
-      btn.disabled = true;
-      btn.textContent = 'Not yet';
-      return;
-    }
-
-    // Armed.
-    step.textContent = 'Bag ' + (done + 1) + ' of ' + bags;
-    note.textContent = 'Hand it over. One press, one bag.';
-    btn.disabled = fbusy;
-    btn.textContent = fbusy ? '\u2026' : 'Press';
-  }
-
-  /* Deliberately the opposite of the floor button. Out there a dropped
-     tap is the thing to avoid, so presses are optimistic and never wait.
-     Here a double-tap burns a group's bag, so the button dies on press
-     and only comes back once the server has confirmed the new count. */
-  $('hf-btn').addEventListener('click', async () => {
-    if (fbusy || $('hf-btn').disabled) return;
-    fbusy = true;
-    $('hf-btn').disabled = true;
-    $('hf-btn').textContent = '\u2026';
-
-    const line = (fst && fst.final_line) || 42;
-    let failed = null;
-    try {
-      const { data, error } = await sb.rpc('increment_line', { line_id: line });
-      if (error) throw error;
-      if (data && data.error) failed = 'Not counted \u2014 ' + data.error;
-      else if (navigator.vibrate) navigator.vibrate(80);
-    } catch (e) {
-      console.error(e);
-      failed = 'No connection \u2014 nothing counted. Press again.';
-    }
-
-    fbusy = false;
-    await fRefresh();
-    if (failed) { $('hf-note').className = 'err'; $('hf-note').textContent = failed; }
-  });
 })();
 </script>
 </body>
