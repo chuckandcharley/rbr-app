@@ -223,9 +223,56 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 #hp-keys button:active{background:rgba(255,255,255,.32);}
 #hp-pin-msg{font-size:clamp(11px,1.7vh,14px);font-weight:700;color:#ff9b8f;min-height:2.6vh;}
 
+/* ── DOOR — which pad? Shown straight after the PIN. ── */
+#hp-door{position:fixed;inset:0;z-index:9050;background:#00243f;display:none;
+  flex-direction:column;align-items:center;justify-content:center;gap:1.8vh;
+  color:#fff;padding:4vh 6vw;}
+#hp-door.on{display:flex;}
+#hp-door-label{font-size:clamp(9px,1.4vh,12px);font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:.6vh;}
+.hp-door-btn{width:100%;max-width:520px;padding:4.4vh 2vw;border:none;border-radius:16px;
+  background:rgba(255,255,255,.13);color:#fff;font-family:var(--ff);font-weight:900;
+  font-size:clamp(18px,3.4vh,30px);cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.hp-door-btn:active{background:rgba(255,255,255,.3);transform:scale(.98);}
+#hp-door-close{background:none;border:none;color:rgba(255,255,255,.45);font-family:var(--ff);
+  font-size:clamp(11px,1.7vh,14px);font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  cursor:pointer;padding:1.4vh;-webkit-tap-highlight-color:transparent;}
+
+/* ── FINAL FIVE — line 42. One button, one group at a time. ── */
+#hp-final{position:fixed;inset:0;z-index:9060;background:#00243f;display:none;
+  flex-direction:row;align-items:stretch;color:#fff;padding:2.4vh 3vw;gap:3vw;}
+#hp-final.on{display:flex;}
+#hf-left{flex:1 1 50%;display:flex;flex-direction:column;justify-content:center;
+  min-width:0;gap:1vh;}
+#hf-right{flex:1 1 50%;display:flex;align-items:center;justify-content:center;}
+#hf-step{font-size:clamp(9px,1.4vh,12px);font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;color:rgba(255,255,255,.45);}
+#hf-num{font-size:clamp(34px,9vh,80px);font-weight:900;line-height:1;
+  letter-spacing:-.03em;font-variant-numeric:tabular-nums;}
+#hf-note{font-size:clamp(12px,1.9vh,17px);font-weight:700;line-height:1.45;
+  color:rgba(255,255,255,.6);min-height:4vh;}
+#hf-note.err{color:#ff9b8f;}
+#hf-back{align-self:flex-start;margin-top:1vh;background:none;
+  border:1.5px solid rgba(255,255,255,.2);border-radius:8px;padding:1.2vh 3vw;
+  font-family:var(--ff);font-size:clamp(9px,1.3vh,11px);font-weight:700;letter-spacing:.1em;
+  text-transform:uppercase;color:rgba(255,255,255,.45);cursor:pointer;
+  -webkit-tap-highlight-color:transparent;}
+#hf-btn{width:min(74vh,44vw);height:min(74vh,44vw);
+  max-width:calc(50vw - 40px);max-height:calc(100vh - 60px);
+  border-radius:50%;border:none;background:var(--blue);color:var(--navy);
+  font-family:var(--ff);font-weight:900;font-size:clamp(20px,4.4vh,40px);
+  cursor:pointer;-webkit-tap-highlight-color:transparent;
+  transition:transform .1s,background .12s,color .12s;
+  box-shadow:0 0 0 10px rgba(0,176,255,.18),0 0 0 22px rgba(0,176,255,.08);}
+#hf-btn:active:not(:disabled){transform:scale(.94);}
+#hf-btn:disabled{background:rgba(255,255,255,.1);color:rgba(255,255,255,.3);
+  box-shadow:none;cursor:default;}
+
 @media (orientation:portrait){
   #hp-veil{flex-direction:column;gap:2vh;}
   #hp-one{padding:3.4vh .4vw!important;}
+  #hp-final{flex-direction:column;gap:2vh;}
+  #hf-btn{width:min(40vh,74vw);height:min(40vh,74vw);max-width:none;max-height:none;}
 }
 
 </style>
@@ -313,7 +360,28 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
       <button class="minus" data-add="-10">&minus;10</button>
       <button class="minus" data-add="-100">&minus;100</button>
     </div>
-    <button id="hp-close">Close</button>
+    <button id="hp-close">Back</button>
+  </div>
+</div>
+
+<!-- DOOR — shown right after the PIN -->
+<div id="hp-door">
+  <div id="hp-door-label">Which pad?</div>
+  <button class="hp-door-btn" id="hp-door-prepacked">Pre-packed bags</button>
+  <button class="hp-door-btn" id="hp-door-final">Final five</button>
+  <button id="hp-door-close">Close</button>
+</div>
+
+<!-- FINAL FIVE — line 42 -->
+<div id="hp-final">
+  <div id="hf-left">
+    <div id="hf-step">Final five</div>
+    <div id="hf-num">&mdash;</div>
+    <div id="hf-note"></div>
+    <button id="hf-back">Back</button>
+  </div>
+  <div id="hf-right">
+    <button id="hf-btn" disabled>Not yet</button>
   </div>
 </div>
 
@@ -356,9 +424,10 @@ let lineCount = 0;
 let locked = false;
 // (the old `tapping` mutex is gone — see the tap handler)
 
-// Finish-line message follows GOAL, so there's no second place to edit.
+/* Placeholder only — refreshTotal() overwrites this on the first read,
+   picking the right wording for why the button is dead. */
 document.getElementById('tap-locked-msg').textContent =
-  `${GOAL.toLocaleString()} Bags Completed! Thank you for being a part of it!`;
+  'Your line is done \u2014 look up for the last five.';
 
 // ── Build line grid ──
 const grid = document.getElementById('line-grid');
@@ -505,10 +574,17 @@ async function refreshTotal() {
 
     goal = data.goal || GOAL;
     floorCap = (data.floor_cap != null) ? data.floor_cap : goal;
-    document.getElementById('tap-locked-msg').textContent =
-      `${goal.toLocaleString()} Bags Completed! Thank you for being a part of it!`;
 
     const total = data.total || 0;
+
+    /* Two different reasons this button goes dead, and they must not
+       read the same. At the cap the floor is done but the event isn't —
+       the final five are still being packed on stage, and 39 tablets
+       announcing "16,000 completed" through that would be wrong. */
+    document.getElementById('tap-locked-msg').textContent = (total >= goal)
+      ? `${goal.toLocaleString()} Bags Completed! Thank you for being a part of it!`
+      : `Your line is done \u2014 look up for the last five.`;
+
     if (total >= floorCap) setLocked(true);
     else if (locked) setLocked(false);
   } catch (err) {
@@ -680,10 +756,21 @@ document.addEventListener('fullscreenchange', lockLandscape);
     if (entry.length === 4) {
       $('hp-pin-msg').textContent = 'Checking\u2026';
       const r = await send(entry, null);      // null amount = just check the PIN
-      if (r && r.ok) { hostPin = entry; closePin(); openPad(r.state); }
+      if (r && r.ok) { hostPin = entry; closePin(); openDoor(r.state); }
       else { $('hp-pin-msg').textContent = r ? 'Wrong PIN.' : 'No connection.'; entry = ''; drawPin(); }
     }
   });
+
+  /* ── The door ───────────────────────────────────────────── */
+  function openDoor(s) {
+    if (s) st = s;
+    $('hp-door').classList.add('on');
+  }
+  function closeDoor() { $('hp-door').classList.remove('on'); }
+
+  $('hp-door-close').addEventListener('click', closeDoor);
+  $('hp-door-prepacked').addEventListener('click', () => { closeDoor(); openPad(st); });
+  $('hp-door-final').addEventListener('click', () => { closeDoor(); openFinal(); });
 
   /* ── The pad ────────────────────────────────────────────── */
   function openPad(s) {
@@ -695,6 +782,7 @@ document.addEventListener('fullscreenchange', lockLandscape);
   function closePad() {
     $('hp-veil').classList.remove('on');
     clearInterval(poll); poll = null;
+    openDoor();
   }
   $('hp-close').addEventListener('click', closePad);
 
@@ -749,8 +837,15 @@ document.addEventListener('fullscreenchange', lockLandscape);
     $('hp-count').textContent = fmt(host);
     $('hp-of').textContent = 'of ' + fmt(target) + ' pre-packed  \u00b7  board ' + fmt(total) + ' / ' + fmt(g);
 
-    // Where you'd be if you were keeping step with the floor.
-    const pace = (g - target) > 0 ? Math.round(floor_ * target / (g - target)) : 0;
+    /* Where you'd be if you were keeping step with the floor — biased so
+       "in step" means finishing the pre-packed bags at about 85% of the
+       floor's work, not in a dead heat with it. Running out of real bags
+       before the count reaches the cap is the only way this stalls, so
+       the target is deliberately early. Clamped so it never asks for
+       more than the pre-packed total. */
+    const pace = (g - target) > 0
+      ? Math.min(target, Math.round(floor_ * target / (0.85 * (g - target))))
+      : 0;
     const gap  = host - pace;
     const p = $('hp-pace');
     p.className = Math.abs(gap) < 40 ? '' : (gap < 0 ? 'behind' : 'ahead');
@@ -766,14 +861,111 @@ document.addEventListener('fullscreenchange', lockLandscape);
       ban.classList.add('on');
       ban.style.background = '#15794a';
       ban.textContent = fmt(g) + ' \u2014 that\u2019s the whole thing.';
-    } else if (floor_ >= cap) {
+    } else if (total >= cap) {
+      /* Was `floor_ >= cap`, which could never be true: the floor alone
+         tops out well below the cap because the cap counts pre-packed
+         bags too. Same test the tablets lock on. */
       ban.classList.add('on');
       ban.style.background = '#c0392b';
-      ban.innerHTML = 'The floor tablets have stopped.<br>The last <b>' + fmt(left) + '</b> are yours.';
+      ban.innerHTML = 'Floor tablets have stopped.<br>The last <b>' + fmt(left) + '</b> are on the Final five pad.';
     } else {
       ban.classList.remove('on');
     }
   }
+
+  /* ════════════════════════════════════════════════════════
+     FINAL FIVE — line 42
+     How many bags belong to this pad is the reserve, straight
+     from the server: goal minus the floor cap. Change the
+     reserve in admin and this follows. Nothing to edit here.
+     ════════════════════════════════════════════════════════ */
+
+  let fst = null, fpoll = null, fbusy = false;
+
+  function openFinal() {
+    $('hp-final').classList.add('on');
+    fdraw();
+    fRefresh();
+    fpoll = setInterval(fRefresh, 2000);
+  }
+  function closeFinal() {
+    $('hp-final').classList.remove('on');
+    clearInterval(fpoll); fpoll = null;
+    openDoor();
+  }
+  $('hf-back').addEventListener('click', closeFinal);
+
+  async function fRefresh() {
+    if (fbusy) return;                       // don't clobber a press in flight
+    const { data, error } = await sb.rpc('scoreboard');
+    if (!error && data) { fst = data; fdraw(); }
+  }
+
+  function fdraw() {
+    const btn = $('hf-btn'), num = $('hf-num'), note = $('hf-note'), step = $('hf-step');
+    if (!fst) { note.textContent = 'Reading the board\u2026'; return; }
+
+    const total = fst.total || 0;
+    const g     = fst.goal  || 16000;
+    const cap   = (fst.floor_cap != null) ? fst.floor_cap : g;
+    const bags  = Math.max(0, g - cap);      // how many belong to this pad
+    const done  = Math.max(0, total - cap);  // how many of them are in
+
+    note.className = '';
+    num.textContent = fmt(total);            // always the live board
+
+    // Done.
+    if (total >= g) {
+      step.textContent = 'Done';
+      note.textContent = 'That\u2019s the whole thing.';
+      btn.disabled = true;
+      btn.textContent = fmt(g);
+      return;
+    }
+
+    // Not yet — the floor hasn't reached the cap. Button stays dead.
+    if (total < cap) {
+      step.textContent = 'Waiting';
+      note.textContent = 'The floor is still packing. Needs ' + fmt(cap - total) +
+                         ' more. This wakes up on its own \u2014 nothing to do.';
+      btn.disabled = true;
+      btn.textContent = 'Not yet';
+      return;
+    }
+
+    // Armed.
+    step.textContent = 'Bag ' + (done + 1) + ' of ' + bags;
+    note.textContent = 'Hand it over. One press, one bag.';
+    btn.disabled = fbusy;
+    btn.textContent = fbusy ? '\u2026' : 'Press';
+  }
+
+  /* Deliberately the opposite of the floor button. Out there a dropped
+     tap is the thing to avoid, so presses are optimistic and never wait.
+     Here a double-tap burns a group's bag, so the button dies on press
+     and only comes back once the server has confirmed the new count. */
+  $('hf-btn').addEventListener('click', async () => {
+    if (fbusy || $('hf-btn').disabled) return;
+    fbusy = true;
+    $('hf-btn').disabled = true;
+    $('hf-btn').textContent = '\u2026';
+
+    const line = (fst && fst.final_line) || 42;
+    let failed = null;
+    try {
+      const { data, error } = await sb.rpc('increment_line', { line_id: line });
+      if (error) throw error;
+      if (data && data.error) failed = 'Not counted \u2014 ' + data.error;
+      else if (navigator.vibrate) navigator.vibrate(80);
+    } catch (e) {
+      console.error(e);
+      failed = 'No connection \u2014 nothing counted. Press again.';
+    }
+
+    fbusy = false;
+    await fRefresh();
+    if (failed) { $('hf-note').className = 'err'; $('hf-note').textContent = failed; }
+  });
 })();
 </script>
 </body>
