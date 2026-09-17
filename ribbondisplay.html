@@ -43,9 +43,13 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 
 /* ── Count ─────────────────────────────────────────────────── */
 #readout{flex:0 0 auto;min-width:0;}
+/* Centred, not left-aligned. #readout is shrink-to-fit, and its width is
+   set by the number slot below (the "16,000" ghost is far wider than the
+   label), so centring here lands the label over the middle of the digits
+   instead of jammed against the left edge of the board. */
 #total-label{
   font-size:clamp(13px,10vh,28px);font-weight:600;letter-spacing:.05em;
-  color:var(--dim);line-height:1;white-space:nowrap;
+  color:var(--dim);line-height:1;white-space:nowrap;text-align:center;
   margin-bottom:clamp(4px,1.6vh,10px);
 }
 
@@ -87,8 +91,12 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
   display:flex;align-items:baseline;justify-content:space-between;
   gap:clamp(12px,2vw,32px);margin-bottom:clamp(6px,2.5vh,14px);
 }
+/* The tagline, not a caption — full white and roughly 60% larger. At 15vh
+   it's ~38px on a 1536x256 board, which measures ~660px of the ~770px the
+   meter column has left after the percentage, so it still sets on one line
+   without reaching the ellipsis. */
 #total-goal{
-  font-size:clamp(12px,9vh,26px);font-weight:700;color:var(--dim);
+  font-size:clamp(15px,15vh,44px);font-weight:700;color:#fff;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;
 }
 #progress-pct{
@@ -123,7 +131,7 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
   #rule{display:none;}
   #progress-wrap{width:100%;max-width:900px;margin-top:clamp(24px,5vh,56px);}
   #progress-head{flex-direction:column;align-items:center;gap:0;margin-bottom:14px;}
-  #total-goal{font-size:clamp(16px,2.2vw,34px);margin-bottom:10px;white-space:normal;text-align:center;}
+  #total-goal{font-size:clamp(22px,3vw,46px);margin-bottom:12px;white-space:normal;text-align:center;}
   #progress-pct{font-size:clamp(14px,1.6vw,22px);}
   #progress-track{height:clamp(12px,1.2vw,18px);}
 }
