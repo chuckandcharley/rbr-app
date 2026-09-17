@@ -87,113 +87,88 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
   #sponsor-plate img{height:56px;}
 }
 
-/* CELEBRATION — FALLING CONFETTI ON CACHED SHEETS
+/* CELEBRATION SPOTLIGHT
    ────────────────────────────────────────────────────────────
-   Fourth attempt. The confetti is back and it falls properly; what
-   changed is the thing I had wrong about WHY the earlier versions
-   skipped.
+   No confetti, and not for want of trying. Four versions of it were
+   built (canvas, 90 CSS layers, 3 searchlights, cached sheets) and
+   all four behaved identically: smooth on the computer, steppy on
+   the wall. The wall is a MIRRORED display, so the page is already
+   smooth by the time anything leaves the machine and the stutter is
+   added downstream, where no amount of code can reach it. The one
+   thing that always looked right on the panels was the static
+   light, because a still image has no frames to drop and a
+   low framerate mirror carries it perfectly.
 
-   I kept counting layers, on the theory that 90 was too many and 3
-   would be fine. But a browser coalesces the damaged regions of a
-   frame into a bounding box before it repaints. Ninety flakes
-   scattered across the panel have a bounding box of THE WHOLE PANEL,
-   and so do three searchlights spanning it — so every one of those
-   versions repainted the full screen every frame regardless of how
-   few objects were moving. Cutting 90 layers to 3 changed a number
-   that was never the problem. That's why "fewer, slower, simpler"
-   kept not working: it was all the same full-screen repaint wearing
-   different clothes.
+   So the celebration is light, and it holds. If the wall ever gets
+   a wired, non mirrored feed, falling confetti becomes possible
+   again and it's worth revisiting: see display-10.html in the
+   project history for a working implementation.
 
-   What actually matters is whether the moving pixels have to be
-   RE-RASTERISED or can just be re-blitted. So:
+   Everything here is opacity only. No transforms animating, no
+   gradients being re rasterised, no filter:blur(), which at this
+   size is the most expensive thing we could ask for. The soft edges
+   come from stacked radial gradients that reach zero before any
+   element boundary.
 
-   Every flake is a static child of one of three tall sheets, and it
-   is the SHEETS that move — one transform each, translating
-   downward. A sheet is rasterised once into a texture and then every
-   frame is that same texture drawn at a new offset. It is precisely
-   the operation a browser performs when you scroll a page, which is
-   the one continuous full-screen animation every signage player on
-   earth is already good at. Nothing is re-rasterised after the first
-   paint: not the flakes, not their rotations, not the gradients.
+   It's deliberately much stronger than the earlier version, which
+   read as timid. Two reasons it now doesn't: the beam and pool are
+   roughly half again as bright, and there's a vignette darkening
+   the corners. The vignette is what does the heavy lifting, because
+   brightness is perceived by contrast, and dimming the edges makes
+   the centre look lit rather than merely pale.
 
-   Each sheet is 200vh tall and holds every flake twice, one viewport
-   apart, so translating it exactly 100vh brings it back to a pixel
-   identical starting state — the loop is seamless and needs no JS.
-   Three sheets at different speeds give parallax depth and mean the
-   combined pattern doesn't visibly repeat for minutes.
-
-   The flakes carry static rotations rather than tumbling. Individual
-   tumble is the one thing this trade gives up, and it's the right
-   thing to give up: at wall distance a falling flake reads by its
-   colour, size and streak, and tumble costs a per-flake re-raster
-   every frame, which is exactly what we can't afford.
-
-   The fade-in lives on the CONTAINER, not the sheets — an opacity
-   transition on a sheet would force it into a render surface and
-   undo the cached-texture trick for the duration. */
-
-/* The light, unchanged and entirely static: stacked radial gradients,
-   painted once. It sits BEHIND the board so it reads as light on the
-   board rather than a veil over the text. */
+   It sits BEHIND #layout, so it reads as light falling on the board
+   rather than a veil over the text. */
 #spotlight{
   position:fixed;inset:0;z-index:0;pointer-events:none;
   display:none;contain:layout paint;
 }
+
+/* Corners pulled down first, so the light has something to be
+   brighter than. */
+#spotlight .vignette{
+  position:absolute;inset:0;
+  background:radial-gradient(62% 62% at 50% 44%,
+    rgba(0,18,34,0) 0%,
+    rgba(0,18,34,.30) 66%,
+    rgba(0,18,34,.55) 100%);
+  opacity:0;transition:opacity 820ms ease-out;
+}
+
+/* The shaft, narrow and bright where it enters at the top and
+   spreading as it comes down. */
 #spotlight .beam{
   position:absolute;top:0;left:50%;transform:translateX(-50%);
   width:min(1800px,112vw);height:min(900px,86vh);
   background:
-    radial-gradient(13% 15% at 50% -1%, rgba(216,241,255,.26) 0%, rgba(216,241,255,0) 70%),
-    radial-gradient(23% 25% at 50% 19%, rgba(216,241,255,.15) 0%, rgba(216,241,255,0) 74%),
-    radial-gradient(38% 30% at 50% 46%, rgba(216,241,255,.095) 0%, rgba(216,241,255,0) 76%),
-    radial-gradient(54% 33% at 50% 72%, rgba(216,241,255,.055) 0%, rgba(216,241,255,0) 78%);
-  opacity:0;transition:opacity 780ms ease-out;
+    radial-gradient(13% 15% at 50% -1%, rgba(216,241,255,.40) 0%, rgba(216,241,255,0) 70%),
+    radial-gradient(23% 25% at 50% 19%, rgba(216,241,255,.23) 0%, rgba(216,241,255,0) 74%),
+    radial-gradient(38% 30% at 50% 46%, rgba(216,241,255,.145) 0%, rgba(216,241,255,0) 76%),
+    radial-gradient(54% 33% at 50% 72%, rgba(216,241,255,.085) 0%, rgba(216,241,255,0) 78%);
+  opacity:0;transition:opacity 780ms ease-out 140ms;
 }
+
+/* The pool where it lands, under the number and the message. Staged
+   last so the light reads as travelling down rather than everything
+   switching on at once. Staggered delays cost nothing. */
 #spotlight .pool{
   position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);
   width:min(1560px,94vw);height:min(660px,56vh);
   background:radial-gradient(50% 50% at 50% 50%,
-    rgba(216,241,255,.13) 0%,
-    rgba(216,241,255,.05) 52%,
+    rgba(216,241,255,.20) 0%,
+    rgba(216,241,255,.08) 52%,
     rgba(216,241,255,0) 100%);
-  opacity:0;transition:opacity 900ms ease-out 260ms;
+  opacity:0;transition:opacity 900ms ease-out 400ms;
 }
-#spotlight.lit .beam,#spotlight.lit .pool{opacity:1;}
 
-/* The confetti, in FRONT of the board — where confetti actually is. */
-#confetti{
-  position:fixed;inset:0;z-index:60;pointer-events:none;
-  display:none;overflow:hidden;contain:layout paint;
-  opacity:0;transition:opacity 700ms ease-out;
-}
-#confetti.lit{opacity:1;}
+#spotlight.lit .vignette,#spotlight.lit .beam,#spotlight.lit .pool{opacity:1;}
 
-#confetti .sheet{
-  position:absolute;left:0;right:0;top:-100vh;height:200vh;
-  will-change:transform;
-  animation-name:sheet-fall;animation-timing-function:linear;
-  animation-iteration-count:infinite;
-}
-/* Exactly one viewport, which is the sheet's own repeat period. */
-@keyframes sheet-fall{
-  from{transform:translate3d(0,0,0);}
-  to  {transform:translate3d(0,100vh,0);}
-}
-#confetti .s1{animation-duration:5s;}
-#confetti .s2{animation-duration:7.2s;}
-#confetti .s3{animation-duration:9.8s;}
-
-#confetti i{position:absolute;display:block;border-radius:1px;}
-
-/* ?fall=0 — freeze the sheets where they are and keep the confetti as
-   a still burst. The fallback if the wall still won't have it. */
-#confetti.nofall .sheet{animation:none;}
-
-/* ?fade=0 — snap straight to the lit state with no transition. */
-#spotlight.nofade .beam,#spotlight.nofade .pool,#confetti.nofade{transition:none;}
+/* ?fade=0 snaps straight to the lit state with no transition at all,
+   in case even the fade misbehaves on the day. */
+#spotlight.nofade .vignette,#spotlight.nofade .beam,#spotlight.nofade .pool{transition:none;}
 
 /* Deliberately NO prefers-reduced-motion rule. This is a public
-   scoreboard on a wall — nobody watching it has an OS preference that
+   scoreboard on a wall: nobody watching it has an OS preference that
    applies, while the signage player plausibly does, and honouring it
    would mean the celebration silently failing at the one moment that
    matters. Use ?spotlight=0 to turn it off on purpose instead. */
@@ -213,6 +188,7 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 <body>
 
 <div id="spotlight" aria-hidden="true">
+  <div class="vignette"></div>
   <div class="beam"></div>
   <div class="pool"></div>
 </div>
@@ -230,7 +206,6 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
   </div>
 </div>
 
-<div id="confetti" aria-hidden="true"></div>
 <div id="conn"></div>
 <div id="debug"></div>
 
@@ -254,7 +229,7 @@ let cfg = { goal: 16000, force: false, hostLine: 41, floorCap: 15995 };
 let goalOverride = null;  // set by ?goal=N for rehearsals
 let dbg = null;           // set by ?debug=1
 let dbgBase = '';         // counts line, written by applyState
-let dbgCf = '';           // confetti line, written by the frame loop
+let dbgCf = '';           // player line, written by the frame meter
 
 function renderDebug() {
   if (!dbg) return;
@@ -379,123 +354,44 @@ function applyState() {
 /* ════════════════════════════════════════════════════════════
    CELEBRATION
    ────────────────────────────────────────────────────────────
-   Builds the three confetti sheets once, then hands everything to
-   CSS. After startCelebration() returns there is no per-frame
-   JavaScript at all: the sheets are driven by CSS keyframes on the
-   compositor, and the light is static. Nothing here re-measures on
-   resize or fullscreen either — every dimension is vh/vmin/vw, so
-   the browser handles it.
-
-   See the CSS block for why the flakes are static children of moving
-   sheets rather than moving individually.
+   Two class toggles and a timer. There is no per frame JavaScript
+   here, nothing to build, and nothing to re-measure on resize or
+   fullscreen: every dimension in the CSS is vh/vw, so the browser
+   handles it. See the CSS block for why the celebration is light
+   rather than confetti.
    ════════════════════════════════════════════════════════════ */
 
-const CONFETTI_COLORS = ['#00b0ff','#004270','#0378ad','#ffffff','#f3f9fd','#7fd4ff'];
-
-let spotlightOn = true;   // ?spotlight=0 — no celebration at all
-let spotFade = true;      // ?fade=0 — snap to lit with no transition
-let flakesPerSheet = 0;   // ?flakes=N — 0 means scale to the viewport
-let built = false;
+let spotlightOn = true;   // ?spotlight=0 turns the celebration off
+let spotFade = true;      // ?fade=0 snaps to lit with no transition
 let spotTimer = null;
 
-/* Near, mid and far, so the three sheets read as depth rather than as
-   three copies of the same thing: the fast one is biggest and
-   brightest, the slow one small and faint. */
-const SHEETS = [
-  { cls: 's1', scale: 1.15, alpha: 1.00 },
-  { cls: 's2', scale: 0.85, alpha: 0.80 },
-  { cls: 's3', scale: 0.62, alpha: 0.55 }
-];
-
-function buildConfetti() {
-  const host = document.getElementById('confetti');
-  if (!host) return;
-
-  /* Per sheet, and doubled again for the seamless wrap — so the DOM
-     total is six times this. They're static children, painted once
-     and never touched again, which is why the count can be generous. */
-  const area = window.innerWidth * window.innerHeight;
-  const per = flakesPerSheet || Math.max(20, Math.min(64, Math.round(area / 38000)));
-
-  host.textContent = '';
-  const frag = document.createDocumentFragment();
-
-  SHEETS.forEach((s, si) => {
-    const sheet = document.createElement('div');
-    sheet.className = 'sheet ' + s.cls;
-
-    for (let i = 0; i < per; i++) {
-      const left = Math.random() * 100;
-      const top  = Math.random() * 100;               // vh, within one period
-      const w    = (0.55 + Math.random() * 0.85) * s.scale;
-      const h    = (0.95 + Math.random() * 1.30) * s.scale;
-      const rot  = Math.random() * 360;
-      const col  = CONFETTI_COLORS[(si * per + i) % CONFETTI_COLORS.length];
-      const op   = (s.alpha * (0.75 + Math.random() * 0.25)).toFixed(2);
-
-      /* Placed twice, exactly one viewport apart. That's what makes
-         the 100vh translate loop seamless — the sheet's end state is
-         pixel-identical to its start state. */
-      for (const off of [0, 100]) {
-        const f = document.createElement('i');
-        f.style.cssText =
-          'left:' + left.toFixed(2) + '%;' +
-          'top:' + (top + off).toFixed(2) + 'vh;' +
-          'width:' + w.toFixed(2) + 'vmin;' +
-          'height:' + h.toFixed(2) + 'vmin;' +
-          'background:' + col + ';' +
-          'opacity:' + op + ';' +
-          'transform:rotate(' + rot.toFixed(1) + 'deg);';
-        sheet.appendChild(f);
-      }
-    }
-    frag.appendChild(sheet);
-  });
-
-  host.appendChild(frag);
-  built = true;
-}
-
 function startCelebration() {
-  if (!spotlightOn) return;
-  const light = document.getElementById('spotlight');
-  const conf  = document.getElementById('confetti');
-  if (!light || !conf) return;
+  const el = document.getElementById('spotlight');
+  if (!el || !spotlightOn) return;
 
   clearTimeout(spotTimer);
-  if (!built) buildConfetti();
-  light.style.display = 'block';
-  conf.style.display = 'block';
+  el.style.display = 'block';
 
-  if (!spotFade) { light.classList.add('lit'); conf.classList.add('lit'); return; }
+  if (!spotFade) { el.classList.add('lit'); return; }
 
-  /* Two frames, not one. display:none → block and the class flip in
+  /* Two frames, not one. display:none to block and the class flip in
      the same frame get coalesced into a single style resolution, the
-     browser never sees opacity:0 as a starting value, and there's no
-     transition to run — it would just appear. */
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    light.classList.add('lit');
-    conf.classList.add('lit');
-  }));
+     browser never sees opacity:0 as a starting value, and there is no
+     transition to run: the light would just appear. */
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('lit')));
 }
 
 function stopCelebration() {
-  const light = document.getElementById('spotlight');
-  const conf  = document.getElementById('confetti');
-  if (!light || !conf) return;
+  const el = document.getElementById('spotlight');
+  if (!el) return;
 
-  light.classList.remove('lit');
-  conf.classList.remove('lit');
-
-  /* Let it fade out before taking it off the compositor, but only if
-     nothing has re-lit it in the meantime. */
+  el.classList.remove('lit');
+  /* Let it fade back out before taking it off the compositor, but
+     only if nothing has re-lit it in the meantime. */
   clearTimeout(spotTimer);
   spotTimer = setTimeout(() => {
-    if (!conf.classList.contains('lit')) {
-      light.style.display = 'none';
-      conf.style.display = 'none';
-    }
-  }, spotFade ? 1000 : 0);
+    if (!el.classList.contains('lit')) el.style.display = 'none';
+  }, spotFade ? 1400 : 0);
 }
 
 /* ── Frame meter (?debug=1 only) ──
@@ -514,7 +410,7 @@ function startFpsMeter() {
     fpsFrames++;
     if (now - fpsMark >= 1000) {
       dbgCf = 'player · ' + Math.round(1000 * fpsFrames / (now - fpsMark)) +
-              'fps main thread · confetti runs on the compositor';
+              'fps main thread · celebration is a held state';
       renderDebug();
       fpsMark = now;
       fpsFrames = 0;
@@ -536,10 +432,6 @@ document.addEventListener('visibilitychange', () => {
    ?goal=25      lower the scoreboard goal for a dry run
    ?debug=1      show floor / host / caps, plus the player's frame rate
    ?spotlight=0  no celebration at all, just the board
-   ?flakes=N     flakes per sheet (there are three sheets, and each
-                 flake is placed twice) — default scales to the screen
-   ?fall=0       freeze the sheets and leave the confetti as a still
-                 burst; the fallback if the wall still won't have it
    ?fade=0       snap to the lit state with no transition, for a player
                  that can't even manage the fade
    None of these can be triggered by accident — the live URL stays
@@ -555,15 +447,9 @@ if (_q.get('debug')) {
   startFpsMeter();
 }
 if (_q.get('spotlight') === '0') spotlightOn = false;
-if (_q.get('flakes') !== null) {
-  const n = parseInt(_q.get('flakes'), 10);
-  if (n >= 0 && n <= 200) flakesPerSheet = n;
-}
-if (_q.get('fall') === '0') document.getElementById('confetti').classList.add('nofall');
 if (_q.get('fade') === '0') {
   spotFade = false;
   document.getElementById('spotlight').classList.add('nofade');
-  document.getElementById('confetti').classList.add('nofade');
 }
 if (_q.get('celebrate') || _q.get('confetti')) startCelebration();
 
