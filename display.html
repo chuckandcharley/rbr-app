@@ -53,38 +53,77 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
 }
 /* Sized by height rather than width, so the plate scales against the
    vertical space it shares with the number, not against window width.
-   The 100px ceiling lands it at roughly a quarter of the capped number
-   height, which keeps the sponsor clearly secondary on a big wall. */
-#sponsor-plate img{display:block;height:clamp(34px,7.6vh,100px);width:auto;}
+   The 150px ceiling is about a third of the capped number height —
+   bigger than a sponsor lockup usually wants, but it reads from the
+   back of the room, which is the point. */
+#sponsor-plate img{display:block;height:clamp(44px,11vh,150px);width:auto;}
 
 /* Same reasoning as the min on #total-num: on a short viewport the board
    already nearly fills the height, so the plate gives way instead of
    pushing the top of the stack into overflow:hidden. */
 @media (max-height:800px){
   #sponsor-plate{margin-top:11px;}
-  #sponsor-plate img{height:36px;}
+  #sponsor-plate img{height:48px;}
 }
 
-/* Spot-checking the display on a phone shouldn't look broken. */
+/* Spot-checking the display on a phone shouldn't look broken. The logo
+   needs its own cap here: 11vh of a tall phone is wider than the
+   padded column, and a four-to-one lockup runs out of width long
+   before it runs out of height. */
 @media (max-width:700px){
   #layout{padding:24px;}
   #total-goal{font-size:24px;}
   #progress-wrap{margin-top:32px;}
+  #sponsor-plate img{height:56px;}
 }
 
 /* CONFETTI */
 
-/* width/height 100% is load-bearing, not decoration. A <canvas> is a
-   replaced element with an intrinsic size, so position:fixed + inset:0
-   alone does NOT stretch it — the browser uses the backing-store size
-   and pins it top-left. That's what caused confetti to cover only part
-   of the screen after entering fullscreen.
+/* CONFETTI
+   No canvas. A full-screen canvas has to be cleared, composited over
+   the board and scaled up to the panel every single frame, and the
+   compositing and scaling are paid at PANEL resolution — which is why
+   shrinking the canvas never fixed the walls. Each flake is now its
+   own element carrying a pure CSS keyframe animation, so the work is
+   proportional to flake area rather than screen area and runs on the
+   compositor thread. See the JS section for the full reasoning.
 
-   display:none until the celebration starts. Left visible, this is a
-   full-screen layer the compositor blends over the board on every
-   frame for the whole event — invisible, but not free on a wall
-   player. JS flips it to block in startConfetti(). */
-#confetti-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:60;pointer-events:none;display:none;}
+   Every distance is in vh/vmin, so a resize or a fullscreen change
+   needs no code at all — which also retires the whole class of bug
+   the old fitConfetti() existed to paper over.
+
+   display:none while idle: no elements rendered, no layers, no cost
+   for the hours before the goal lands. JS flips it to block. */
+#confetti{
+  position:fixed;inset:0;z-index:60;pointer-events:none;
+  overflow:hidden;display:none;contain:layout paint;
+}
+/* will-change is what promotes each flake to its own compositor layer.
+   Without it the browser may animate these on the main thread, which
+   would repaint a full-screen area per frame and put us right back
+   where the canvas was. */
+#confetti .f{
+  position:absolute;top:0;left:var(--l);
+  will-change:transform;backface-visibility:hidden;
+  animation-name:flake-fall;animation-iteration-count:infinite;
+  animation-timing-function:linear;
+}
+/* The vertical steps are deliberately equal (32vh apart) so linear
+   timing gives a dead-constant fall; only x and rotation vary between
+   keyframes, which reads as flutter. --xa/--xb are the sway extremes
+   and --s is turns per fall, both set per flake. */
+@keyframes flake-fall{
+  0%  {transform:translate3d(var(--xa),-14vh,0) rotate(0turn);}
+  25% {transform:translate3d(var(--xb), 18vh,0) rotate(calc(var(--s) * .25turn));}
+  50% {transform:translate3d(var(--xa), 50vh,0) rotate(calc(var(--s) * .5turn));}
+  75% {transform:translate3d(var(--xb), 82vh,0) rotate(calc(var(--s) * .75turn));}
+  100%{transform:translate3d(var(--xa),114vh,0) rotate(calc(var(--s) * 1turn));}
+}
+/* Deliberately NO prefers-reduced-motion rule here. This is a public
+   scoreboard on a wall — nobody watching it has an OS preference that
+   applies, while the signage player plausibly does, and honouring it
+   would mean the confetti silently failing to appear at the one moment
+   that matters. Use ?flakes=0 to disable it on purpose instead. */
 
 /* CONNECTION */
 #conn{position:fixed;bottom:14px;right:16px;width:8px;height:8px;border-radius:50%;background:#3a3;transition:background .3s;}
@@ -113,7 +152,7 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:var(--ff);over
   </div>
 </div>
 
-<canvas id="confetti-canvas"></canvas>
+<div id="confetti"></div>
 <div id="conn"></div>
 <div id="debug"></div>
 
@@ -260,309 +299,145 @@ function applyState() {
 }
 
 /* ════════════════════════════════════════════════════════════
-   CONFETTI — hardened for big walls and low-power players
+   CONFETTI — CSS compositor animations, not canvas
    ────────────────────────────────────────────────────────────
-   1. Motion is per-SECOND, not per-frame, with a clamp — so a hitch
-      becomes a brief slow-down, never a freeze and never a teleport.
-   2. The backing store is capped rather than window-sized, so a 4K
-      player doesn't clear and repaint 8.3M pixels a frame; CSS
-      upscales the smaller canvas to fill the screen.
-   3. The canvas re-fits itself from inside the frame loop, because
-      most TV and stick browsers never fire a resize event on a
-      fullscreen change.
-   4. The particle pool is fixed and reused in place — no per-flake
-      allocation, so nothing feeds the GC mid-celebration.
-   5. Quality is tiered and self-tuning (see CONFETTI_TIERS), and each
-      tier cuts PIXELS before it cuts flakes, which is the fix for a
-      giant panel: the old throttle only thinned particles and so
-      barely touched the actual cost.
-   6. The draw loop is colour-grouped and sets no per-flake
-      globalAlpha, and the whole canvas is display:none until the
-      celebration starts.
+   The canvas version was tuned about as far as it goes and the LED
+   walls still stuttered, because the cost that was left is not one
+   you can tune. A full-screen canvas must be cleared, composited
+   over the board, and scaled up to the panel EVERY frame — and the
+   compositing and scaling happen at PANEL resolution, not canvas
+   resolution. So shrinking the backing store cut the rasterising,
+   which was never the expensive half, and left ~8.3M screen pixels
+   of per-frame work on a 4K wall exactly where it was. Fewer flakes,
+   lower resolution, 30fps: all of it was rearranging deck chairs.
+   Worse, it all ran on the main thread, so a realtime burst or the
+   15s refetch landed directly on top of the animation.
+
+   Each flake is now one small element with a pure CSS keyframe
+   animation, which changes the economics rather than the settings:
+   · Cost is proportional to FLAKE area, not SCREEN area — roughly
+     150k screen pixels a frame instead of 8.3M, and a bigger panel
+     no longer costs more than a small one.
+   · The animations run on the compositor thread. JS, garbage
+     collection, the websocket and the refetch cannot stutter them,
+     because there is no per-frame JS here at all any more.
+   · Distances are in vh/vmin, so resize and fullscreen are handled
+     by the browser for free. That retires fitConfetti() and every
+     bug it existed to paper over.
+
+   If a player somehow still can't hold this, the honest fix is fewer
+   flakes (?flakes=N) — not a different renderer.
    ════════════════════════════════════════════════════════════ */
 
 const CONFETTI_COLORS = ['#00b0ff','#004270','#0378ad','#ffffff','#f3f9fd','#7fd4ff'];
-const CONFETTI_MAX = 260;          // pool ceiling — never allocated past this
-const CONFETTI_MIN_ACTIVE = 60;    // floor the auto-throttle won't go below
 
-/* ── Quality tiers ──
-   The old watchdog only thinned particles, which is why a big wall
-   still stuttered: at that size the cost is per-PIXEL, not per-flake.
-   260 flakes cover maybe 200k pixels a frame, while the canvas they sit
-   on was 2.6M pixels being cleared, composited over the board and then
-   upscaled to the panel — so dropping to 60 flakes cut the cheap part
-   and left the expensive part alone.
+/* Each flake is a compositor layer, and layers are the one thing that
+   does still scale with count, so this is the single number to turn if
+   the wall complains. 90 is dense enough to read as a storm; ?flakes=N
+   overrides it, and ?flakes=0 turns the celebration off entirely. */
+let flakeCount = 90;
+let confettiBuilt = false;
 
-   Each tier therefore cuts the backing store FIRST, thins the flakes
-   second, and only halves the frame rate as a last resort, because a
-   locked 30fps reads as smooth while an erratic 45 reads as broken.
-   Losing resolution is close to invisible here: the flakes are
-   soft-edged, moving, and nobody is standing a foot from an LED wall.
-   frameMs is the minimum gap between drawn frames (0 = uncapped) and
-   slowMs is what counts as a late frame at that target. */
-const CONFETTI_TIERS = [
-  { px: 2600000, max: 260, frameMs:  0, slowMs: 26, flat: false },
-  { px: 1500000, max: 200, frameMs:  0, slowMs: 26, flat: false },
-  { px:  900000, max: 140, frameMs: 32, slowMs: 46, flat: false },
-  { px:  520000, max:  90, frameMs: 32, slowMs: 46, flat: true  },
-];
+function buildConfetti() {
+  const host = document.getElementById('confetti');
+  if (!host) return;
+  host.textContent = '';
+  const frag = document.createDocumentFragment();
 
-const cf = {
-  canvas: null, ctx: null,
-  pool: [], shades: [], active: 0,
-  w: 0, h: 0, scale: 1, sizeScale: 1,
-  tier: 0, pinned: false,
-  running: false, raf: null, last: 0, lastFit: 0,
-  winStart: 0, winFrames: 0, winSlow: 0
-};
+  for (let i = 0; i < flakeCount; i++) {
+    const f = document.createElement('div');
+    f.className = 'f';
 
-/* Pre-mixed rgba strings: colour AND opacity baked in, so the draw loop
-   never touches globalAlpha and only assigns fillStyle when the colour
-   actually changes — see assignShades(). */
-function confettiShades() {
-  if (cf.shades.length) return cf.shades;
-  CONFETTI_COLORS.forEach(hex => {
-    const n = parseInt(hex.slice(1), 16);
-    const rgb = (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255);
-    [1, 0.93, 0.86].forEach(a => cf.shades.push('rgba(' + rgb + ',' + a + ')'));
-  });
-  return cf.shades;
-}
+    const dur  = 5.5 + Math.random() * 5.5;                       // seconds to cross
+    const sway = 1.5 + Math.random() * 4.5;                       // vmin either side
+    const dir  = Math.random() < 0.5 ? -1 : 1;
+    const spin = (Math.random() < 0.5 ? -1 : 1) * (1 + Math.random() * 3);
 
-/* Hand out shades in contiguous blocks across the particles actually in
-   play, so walking the pool in index order walks it in colour order:
-   ~18 fillStyle assignments a frame instead of 260, and no per-flake
-   globalAlpha write. Re-run whenever the active count changes; a flake
-   swapping shade mid-fall is invisible in a storm of them. */
-function assignShades() {
-  const sh = confettiShades();
-  const n = cf.active || 1;
-  for (let i = 0; i < n && i < cf.pool.length; i++) {
-    cf.pool[i].color = sh[Math.min(sh.length - 1, Math.floor(i * sh.length / n))];
-  }
-}
+    /* One cssText write instead of a dozen style property sets, and
+       colours are dealt round rather than drawn at random so all six
+       always show up even at a low flake count. */
+    f.style.cssText =
+      '--l:'   + (Math.random() * 100).toFixed(2) + '%;' +
+      '--xa:'  + ( dir * sway).toFixed(2) + 'vmin;' +
+      '--xb:'  + (-dir * sway).toFixed(2) + 'vmin;' +
+      '--s:'   + spin.toFixed(2) + ';' +
+      'width:'  + (0.8 + Math.random() * 0.9).toFixed(2) + 'vmin;' +
+      'height:' + (1.3 + Math.random() * 0.9).toFixed(2) + 'vmin;' +
+      'background:' + CONFETTI_COLORS[i % CONFETTI_COLORS.length] + ';' +
+      'opacity:' + (0.85 + Math.random() * 0.15).toFixed(2) + ';' +
+      'animation-duration:' + dur.toFixed(2) + 's;' +
+      /* A negative delay starts each flake part-way through its fall,
+         so the screen is already full the instant the goal lands
+         instead of filling from the top over the first five seconds. */
+      'animation-delay:-' + (Math.random() * dur).toFixed(2) + 's;';
 
-/* Fit the canvas to the viewport. Called on load, on resize/fullscreen,
-   and defensively from inside the frame loop — some browsers (and most
-   TV/stick browsers) never fire a resize event on a fullscreen change,
-   which is exactly why the old version needed a manual refresh. */
-function fitConfetti() {
-  const c = cf.canvas;
-  if (!c) return;
-  const t = CONFETTI_TIERS[cf.tier];
-  const cssW = Math.max(1, window.innerWidth);
-  const cssH = Math.max(1, window.innerHeight);
-
-  // Respect DPR up to 2x, then shrink to stay inside the tier's budget.
-  let scale = Math.min(window.devicePixelRatio || 1, 2);
-  const px = cssW * cssH * scale * scale;
-  if (px > t.px) scale *= Math.sqrt(t.px / px);
-  scale = Math.max(0.2, scale);
-
-  const bw = Math.round(cssW * scale);
-  const bh = Math.round(cssH * scale);
-  if (c.width !== bw || c.height !== bh) { c.width = bw; c.height = bh; }
-
-  const oldW = cf.w, oldH = cf.h;
-  cf.w = cssW; cf.h = cssH; cf.scale = scale;
-
-  // Bigger screen = bigger, faster flakes, so they read the same from
-  // the back of the room instead of turning into 6px dust.
-  cf.sizeScale = Math.min(2.5, Math.max(0.8, Math.min(cssW, cssH) / 800));
-
-  // Density from area, not a hardcoded 220 — then capped by the tier,
-  // because area alone pins every big screen to the same 260.
-  const want = Math.round((cssW * cssH) / 14000);
-  const prevActive = cf.active;
-  cf.active = Math.min(t.max, Math.max(CONFETTI_MIN_ACTIVE, want));
-
-  // Grow the pool once; entries are reused forever after.
-  while (cf.pool.length < CONFETTI_MAX) cf.pool.push({});
-  if (cf.active !== prevActive) assignShades();
-
-  // Keep in-flight particles where they were, proportionally.
-  if (oldW && oldH) {
-    const fx = cssW / oldW, fy = cssH / oldH;
-    for (let i = 0; i < cf.pool.length; i++) {
-      const p = cf.pool[i];
-      if (p.x === undefined) continue;
-      p.x *= fx; p.y *= fy;
-    }
+    frag.appendChild(f);
   }
 
-  // A tier change can widen the active range past what was ever seeded.
-  if (cf.running) {
-    for (let i = 0; i < cf.active; i++) {
-      if (cf.pool[i].x === undefined) resetParticle(cf.pool[i], true);
-    }
-  }
-
-  /* Setting .width resets all context state, so re-establish it after.
-     desynchronized lets the player skip a compositing round-trip; the
-     tearing it permits is meaningless on falling confetti. Context
-     attributes are fixed at the first getContext, so these must match
-     everywhere. */
-  cf.ctx = c.getContext('2d', { alpha: true, desynchronized: true });
-  cf.ctx.setTransform(scale, 0, 0, scale, 0, 0);
-}
-
-/* Reuse an existing object — no allocation, no garbage, no GC pauses.
-   Velocities are px/sec and rad/sec, matching the old 60fps feel.
-   Colour is deliberately NOT touched here: it's set once by
-   assignShades() and kept for the life of the flake, which is what
-   keeps the pool in colour order. */
-function resetParticle(p, spread) {
-  const s = cf.sizeScale;
-  p.x = Math.random() * cf.w;
-  p.y = spread ? Math.random() * cf.h : -20 - Math.random() * cf.h * 0.3;
-  p.w = (6 + Math.random() * 8) * s;
-  p.h = (10 + Math.random() * 6) * s;
-  p.rot = Math.random() * Math.PI * 2;
-  p.rotV = (Math.random() - 0.5) * 7.2;
-  p.vx = (Math.random() - 0.5) * 150 * s;
-  p.vy = (150 + Math.random() * 210) * s;
+  host.appendChild(frag);
+  confettiBuilt = true;
 }
 
 function startConfetti() {
-  if (cf.running) return;
-  cf.canvas = document.getElementById('confetti-canvas');
-  cf.canvas.style.display = 'block';
-  while (cf.pool.length < CONFETTI_MAX) cf.pool.push({});
-  fitConfetti();
-  assignShades();
-  for (let i = 0; i < cf.pool.length; i++) resetParticle(cf.pool[i], true);
-  cf.running = true;
-  cf.last = performance.now();
-  cf.lastFit = cf.last;
-  cf.winStart = cf.last;
-  cf.winFrames = 0;
-  cf.winSlow = 0;
-  cf.raf = requestAnimationFrame(confettiFrame);
+  const host = document.getElementById('confetti');
+  if (!host || flakeCount < 1) return;
+  if (!confettiBuilt) buildConfetti();   // ~90 elements, once, in well under a frame
+  host.style.display = 'block';
+  if (dbg) startFpsMeter();
 }
 
 function stopConfetti() {
-  cf.running = false;
-  if (cf.raf) cancelAnimationFrame(cf.raf);
-  cf.raf = null;
-  if (cf.ctx) cf.ctx.clearRect(0, 0, cf.w, cf.h);
-  if (cf.canvas) cf.canvas.style.display = 'none';
+  const host = document.getElementById('confetti');
+  if (host) host.style.display = 'none';
+  stopFpsMeter();
 }
 
-function confettiFrame(now) {
-  if (!cf.running) return;
-  /* Queue the next frame first, so a throw in the body can't kill the
-     loop and leave the celebration frozen on screen. */
-  cf.raf = requestAnimationFrame(confettiFrame);
+/* ── Frame meter (?debug=1 only) ──
+   Deliberately gated: a requestAnimationFrame loop running on the live
+   URL would put back the per-frame main-thread work this whole change
+   exists to remove. Note it samples the MAIN thread — if this reads 60
+   and the wall still looks choppy, the compositor or the panel's own
+   scaler is the culprit, not this page. */
+let fpsRaf = null, fpsFrames = 0, fpsMark = 0;
 
-  const t = CONFETTI_TIERS[cf.tier];
-  const gap = now - cf.last;
-
-  // Frame pacing: at a capped tier, hand the frame straight back rather
-  // than drawing. Physics is per-second, so a 30fps draw covers exactly
-  // the same ground as two 60fps draws.
-  if (t.frameMs && gap < t.frameMs - 1) return;
-
-  // Catch a fullscreen/resolution change even with no resize event —
-  // some TV and stick browsers never fire one. A few times a second is
-  // plenty, and keeps the layout read out of the hot path.
-  if (now - cf.lastFit > 250) {
-    cf.lastFit = now;
-    if (window.innerWidth !== cf.w || window.innerHeight !== cf.h) fitConfetti();
-  }
-
-  let dt = gap / 1000;
-  cf.last = now;
-  if (!(dt > 0)) dt = 1 / 60;
-  if (dt > 0.05) dt = 0.05;   // the anti-teleport clamp
-
-  /* Watchdog. Rolling 30-frame window rather than a run of consecutive
-     slow frames: the old version wanted 90 in a row and so took two or
-     three seconds to react — precisely the seconds everyone is looking
-     at it. Downgrade only, so it can never flap between tiers, and
-     never when a tier was pinned by hand from the URL. */
-  cf.winFrames++;
-  if (gap > t.slowMs) cf.winSlow++;
-  if (cf.winFrames >= 30) {
-    if (!cf.pinned && cf.winSlow > 10 && cf.tier < CONFETTI_TIERS.length - 1) {
-      cf.tier++;
-      fitConfetti();
-    }
-    if (dbg) {
-      const fps = Math.round(1000 * cf.winFrames / Math.max(1, now - cf.winStart));
-      dbgCf = 'confetti tier ' + cf.tier + ' · ' + fps + 'fps · ' +
-        cf.canvas.width + '×' + cf.canvas.height + ' · ' + cf.active + ' flakes';
+function startFpsMeter() {
+  if (fpsRaf) return;
+  fpsMark = performance.now();
+  fpsFrames = 0;
+  const tick = (now) => {
+    fpsFrames++;
+    if (now - fpsMark >= 1000) {
+      dbgCf = 'confetti · ' + Math.round(1000 * fpsFrames / (now - fpsMark)) +
+              'fps main thread · ' + flakeCount + ' flakes · css';
       renderDebug();
+      fpsMark = now;
+      fpsFrames = 0;
     }
-    cf.winStart = now;
-    cf.winFrames = 0;
-    cf.winSlow = 0;
-  }
-
-  const ctx = cf.ctx, s = cf.scale;
-  ctx.setTransform(s, 0, 0, s, 0, 0);
-  ctx.clearRect(0, 0, cf.w, cf.h);
-  ctx.globalAlpha = 1;
-  let fill = null;
-
-  for (let i = 0; i < cf.active; i++) {
-    const p = cf.pool[i];
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    p.rot += p.rotV * dt;
-    // Wrap sideways instead of letting drift carry flakes off the edges
-    // forever — over a long celebration that quietly thinned the middle.
-    if (p.x < -40) p.x += cf.w + 80;
-    else if (p.x > cf.w + 40) p.x -= cf.w + 80;
-    if (p.y > cf.h + 20) resetParticle(p, false);
-
-    if (p.color !== fill) { fill = p.color; ctx.fillStyle = fill; }
-
-    if (t.flat) {
-      /* Bottom tier: no rotation at all. An axis-aligned rect is the
-         rasteriser's fast path and needs no per-flake transform, and
-         squeezing the width on cos(rot) still reads as a flake turning
-         over. The squeeze bottoms out at half width — taken all the way
-         to zero it reads as rain, not confetti. Only reached on a
-         player that couldn't hold tier 2. */
-      const w = p.w * (0.5 + 0.5 * Math.abs(Math.cos(p.rot)));
-      ctx.fillRect(p.x - w / 2, p.y - p.h / 2, w, p.h);
-    } else {
-      // One setTransform instead of save/translate/rotate/restore.
-      const cos = Math.cos(p.rot), sin = Math.sin(p.rot);
-      ctx.setTransform(s * cos, s * sin, -s * sin, s * cos, s * p.x, s * p.y);
-      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
-    }
-  }
-
-  ctx.setTransform(s, 0, 0, s, 0, 0);
+    fpsRaf = requestAnimationFrame(tick);
+  };
+  fpsRaf = requestAnimationFrame(tick);
 }
 
-/* A viewport this large is a wall player, and wall players are where
-   the trouble is — so start a notch down instead of spending the first
-   seconds of the celebration discovering it. Resolution only: tier 1
-   still runs at 60fps with rotation, so a fast machine driving a big
-   panel loses nothing anybody can see. */
-if (window.innerWidth * window.innerHeight > 6000000) cf.tier = 1;
+function stopFpsMeter() {
+  if (fpsRaf) cancelAnimationFrame(fpsRaf);
+  fpsRaf = null;
+  dbgCf = '';
+  renderDebug();
+}
 
-// Size the canvas up front so the first celebration frame is already
-// correct, and re-fit on every event that can change the viewport.
-cf.canvas = document.getElementById('confetti-canvas');
-fitConfetti();
-['resize', 'orientationchange'].forEach(ev => window.addEventListener(ev, fitConfetti));
-document.addEventListener('fullscreenchange', fitConfetti);
-if (window.visualViewport) window.visualViewport.addEventListener('resize', fitConfetti);
+/* The display can sit untouched for hours, and some players suspend a
+   background tab hard enough to leave the board on a stale number. */
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') { cf.last = performance.now(); fitConfetti(); loadAll(); }
+  if (document.visibilityState === 'visible') loadAll();
 });
 
 /* ── Rehearsal hooks (URL-only, nothing on the keyboard) ──
    ?confetti=1  start the celebration immediately on load
    ?goal=25     lower the scoreboard goal for a dry run
-   ?debug=1     show floor / host / caps, plus live confetti fps
-   ?quality=0-3 pin a confetti tier instead of letting it auto-tune —
-                0 is full fat, 3 is the leanest. Use it with ?confetti=1
-                and ?debug=1 on the wall itself to find what that player
-                can actually hold; the auto-tuner is off while pinned.
+   ?debug=1     show floor / host / caps, plus a live frame meter
+   ?flakes=N    override the flake count — the one knob that still
+                matters, since each flake is a compositor layer.
+                ?flakes=0 disables the celebration altogether.
    None of these can be triggered by accident — the live URL stays
    clean.  */
 const _q = new URLSearchParams(location.search);
@@ -571,9 +446,9 @@ if (_q.get('goal')) {
   if (g > 0) { goalOverride = g; cfg.goal = g; }
 }
 if (_q.get('debug')) { dbg = document.getElementById('debug'); dbg.style.display = 'block'; }
-if (_q.get('quality') !== null) {
-  const n = parseInt(_q.get('quality'), 10);
-  if (n >= 0 && n < CONFETTI_TIERS.length) { cf.tier = n; cf.pinned = true; fitConfetti(); }
+if (_q.get('flakes') !== null) {
+  const n = parseInt(_q.get('flakes'), 10);
+  if (n >= 0 && n <= 400) { flakeCount = n; confettiBuilt = false; }
 }
 if (_q.get('confetti')) startConfetti();
 
