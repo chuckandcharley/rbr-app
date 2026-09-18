@@ -164,7 +164,7 @@ body.live #timer-stage{opacity:0;visibility:hidden;}
 
 /* Bounded on BOTH axes, which is the whole trick on a board this shape.
    88vh alone is right for the panel, where height is the scarce axis,
-   but on a laptop preview 88vh of 900px is an 800px "8:00" running off
+   but on a laptop preview 88vh of 900px is an 800px "10:00" running off
    both edges; 26vw alone would be 400px here and dust on a phone.
    min() takes whichever axis runs out first, so the digits are as big
    as the board allows and never larger.
@@ -251,7 +251,7 @@ body.dbg.idle #timer-hint{display:block;}
 </div>
 
 <div id="timer-stage">
-  <div id="timer-num">8:00</div>
+  <div id="timer-num">10:00</div>
 </div>
 <div id="timer-hint"></div>
 
@@ -592,23 +592,23 @@ document.addEventListener('visibilitychange', () => {
 /* ════════════════════════════════════════════════════════════
    PRE-RALLY COUNTDOWN
    ────────────────────────────────────────────────────────────
-   Eight minutes on the panel, then it becomes the live board on
+   Ten minutes on the panel, then it becomes the live board on
    its own. No second tab, no URL to change with a room watching.
    ════════════════════════════════════════════════════════════ */
 
 const TIMER_KEY = 'rbr-ribbon-start-v1';
-let timerMins = 8;
+let timerMins = 10;
 let startedAt = null;     // ms epoch, or null before the start
 let timerTick = null;
 
 /* sessionStorage, deliberately, NOT localStorage. Both survive a reload,
    which is the case worth surviving: an F5 or a crash-recovery mid-event
-   must not put the room back in front of a fresh 8:00, or hide a live
+   must not put the room back in front of a fresh 10:00, or hide a live
    board behind a cover again. But localStorage also survives closing the
    tab, which means a countdown you ran at four o'clock to test is still
    remembered at seven and the panel opens straight into the live board
    with no countdown at all. sessionStorage dies with the tab, so every
-   fresh tab is a clean 8:00 and a rehearsal can't leak into the event.
+   fresh tab is a clean 10:00 and a rehearsal can't leak into the event.
 
    Storage throws outright in a sandboxed frame and on a player with it
    blocked, and a countdown is not worth taking the page down for, so
@@ -705,7 +705,7 @@ if (_q.get('live')){
   const saved = parseInt(tsGet(), 10);
   if (Number.isFinite(saved) && saved > 0){
     /* A reload — or the panel's player rebooting mid-event — must not
-       put the room back in front of a fresh 8:00, and must not hide a
+       put the room back in front of a fresh 10:00, and must not hide a
        live board behind a cover again. The start stamp outlives the
        page, so it returns to exactly where it was. */
     startedAt = saved;
